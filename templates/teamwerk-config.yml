@@ -58,5 +58,6 @@ team:
     - team-lead
     - backend-builder
     - frontend-builder
-    - test-engineer
+    - api-test-engineer
+    - ui-test-engineer
     - test-reviewer
