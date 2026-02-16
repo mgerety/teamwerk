@@ -1,0 +1,62 @@
+# Teamwerk Configuration
+# Copy this to your project root as teamwerk-config.yml
+
+# Project metadata
+project:
+  name: "My Project"
+  description: ""
+
+# Acceptance criteria source
+acceptance-criteria:
+  # Path to your AC document (relative to project root)
+  path: "docs/acceptance-criteria.md"
+
+# Test configuration
+tests:
+  # Directories to scan for test files
+  directories:
+    - tests/
+    - test/
+    - __tests__/
+    - spec/
+
+  # File patterns for test files
+  patterns:
+    - "*.spec.js"
+    - "*.test.js"
+    - "*.spec.ts"
+    - "*.test.ts"
+    - "*Tests.cs"
+    - "test_*.py"
+    - "*_test.py"
+    - "*_test.go"
+
+# Evidence report configuration
+report:
+  # Where to put the generated HTML report
+  output: "tests/report/evidence-report.html"
+  # Where test results JSON lives (Playwright format)
+  results: "tests/report/test-results.json"
+  # Where screenshots are stored
+  evidence-dir: "tests/evidence/"
+
+# Stack overlay (optional — auto-detected if not specified)
+# Uncomment ONE of these if auto-detection doesn't work:
+# overlay: express
+# overlay: dotnet
+# overlay: react
+# overlay: angular
+# overlay: react-native-expo
+
+# Agent team configuration
+team:
+  # tmux session name (default: project directory name)
+  # session-name: my-project
+
+  # Roles to include (default: all)
+  roles:
+    - team-lead
+    - backend-builder
+    - frontend-builder
+    - test-engineer
+    - test-reviewer

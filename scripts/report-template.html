@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Test Evidence Report — {{PROJECT_NAME}}</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f1117; color: #e5e7eb; line-height: 1.6; }
+    a { color: #60a5fa; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+
+    /* Header */
+    header { background: #1a1a2e; color: white; padding: 30px; margin-bottom: 24px; border-radius: 8px; border: 1px solid #2d2d44; }
+    header h1 { font-size: 24px; margin-bottom: 4px; }
+    header .meta { color: #9ca3af; font-size: 13px; }
+
+    /* Summary Cards */
+    .summary-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 24px; }
+    .card { background: #1a1d27; padding: 20px; border-radius: 8px; text-align: center; border: 1px solid #2d2d44; }
+    .card .number { font-size: 36px; font-weight: bold; }
+    .card .label { font-size: 12px; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.5px; }
+    .card.pass .number { color: #22c55e; }
+    .card.fail .number { color: #ef4444; }
+    .card.total .number { color: #60a5fa; }
+    .card.duration .number { color: #f59e0b; font-size: 24px; }
+
+    /* Toolbar */
+    .toolbar { display: flex; gap: 8px; margin-bottom: 24px; flex-wrap: wrap; }
+    .toolbar button { background: #1a1d27; border: 1px solid #2d2d44; color: #e5e7eb; padding: 6px 14px; border-radius: 6px; cursor: pointer; font-size: 13px; transition: background 0.15s; }
+    .toolbar button:hover { background: #2d2d44; }
+    .toolbar button.active { background: #3b82f6; border-color: #3b82f6; color: white; }
+
+    /* Sections */
+    section { background: #1a1d27; border-radius: 8px; padding: 24px; margin-bottom: 16px; border: 1px solid #2d2d44; }
+    section h2 { font-size: 16px; margin-bottom: 16px; padding-bottom: 8px; border-bottom: 1px solid #2d2d44; color: #f9fafb; }
+
+    /* Traceability Table */
+    table { width: 100%; border-collapse: collapse; }
+    th { background: #12141c; text-align: left; padding: 10px 12px; font-size: 11px; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.5px; }
+    td { padding: 10px 12px; border-top: 1px solid #1f2233; font-size: 14px; }
+    tr.ac-row { cursor: pointer; transition: background 0.15s; }
+    tr.ac-row:hover { background: #1f2233; }
+
+    /* Badges */
+    .pass-badge { background: #14532d; color: #4ade80; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+    .fail-badge { background: #7f1d1d; color: #fca5a5; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+    .skip-badge { background: #78350f; color: #fcd34d; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+    .api-badge { background: #1e3a5f; color: #93c5fd; padding: 1px 6px; border-radius: 3px; font-size: 10px; font-weight: 600; }
+    .e2e-badge { background: #3b1f5e; color: #c4b5fd; padding: 1px 6px; border-radius: 3px; font-size: 10px; font-weight: 600; }
+
+    /* AC Sections (collapsible) */
+    .ac-section { margin-bottom: 12px; }
+    .ac-section details { background: #1a1d27; border: 1px solid #2d2d44; border-radius: 8px; overflow: hidden; }
+    .ac-section details[open] { border-color: #3b82f6; }
+    .ac-section summary { padding: 16px 20px; cursor: pointer; display: flex; align-items: center; gap: 12px; user-select: none; list-style: none; transition: background 0.15s; }
+    .ac-section summary::-webkit-details-marker { display: none; }
+    .ac-section summary::before { content: '\25B6'; font-size: 10px; color: #9ca3af; transition: transform 0.2s; flex-shrink: 0; }
+    .ac-section details[open] summary::before { transform: rotate(90deg); }
+    .ac-section summary:hover { background: #1f2233; }
+    .ac-section .ac-title { font-weight: 600; font-size: 15px; flex-grow: 1; }
+    .ac-section .ac-stats { display: flex; gap: 8px; font-size: 12px; color: #9ca3af; align-items: center; }
+    .ac-section .ac-stats span { white-space: nowrap; }
+    .ac-content { padding: 0 20px 20px; }
+
+    /* Test Cards */
+    .test-card { background: #12141c; border: 1px solid #1f2233; border-radius: 6px; padding: 14px 16px; margin-bottom: 10px; }
+    .test-card-header { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; flex-wrap: wrap; }
+    .test-card-header .test-name { font-size: 14px; font-weight: 500; }
+    .test-card-header .test-meta { font-size: 11px; color: #6b7280; margin-left: auto; }
+    .test-card .log-block { background: #0d0f16; padding: 10px 12px; border-radius: 4px; margin-top: 8px; font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace; font-size: 12px; white-space: pre-wrap; overflow-x: auto; color: #d1d5db; border: 1px solid #1f2233; max-height: 300px; overflow-y: auto; }
+    .test-card .error-block { background: #1c0d0d; border-color: #7f1d1d; color: #fca5a5; }
+
+    /* Screenshot Grid */
+    .screenshot-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; margin-top: 12px; }
+    .screenshot-item { background: #12141c; border: 1px solid #1f2233; border-radius: 6px; overflow: hidden; }
+    .screenshot-item img { width: 100%; display: block; cursor: pointer; transition: opacity 0.15s; }
+    .screenshot-item img:hover { opacity: 0.85; }
+    .screenshot-item .caption { padding: 8px 12px; font-size: 12px; color: #9ca3af; }
+
+    /* Lightbox */
+    .lightbox { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 1000; align-items: center; justify-content: center; cursor: zoom-out; }
+    .lightbox.active { display: flex; }
+    .lightbox img { max-width: 90vw; max-height: 90vh; border-radius: 8px; box-shadow: 0 4px 40px rgba(0,0,0,0.5); }
+    .lightbox .caption { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); color: white; font-size: 14px; background: rgba(0,0,0,0.7); padding: 8px 16px; border-radius: 6px; }
+
+    /* Security table */
+    .security-table code { background: #12141c; padding: 2px 6px; border-radius: 3px; font-size: 12px; color: #f59e0b; }
+
+    /* Review section */
+    .review-table td, .review-table th { padding: 8px 12px; }
+
+    /* Coverage gaps */
+    .gap-warning { background: #1c1505; border: 1px solid #78350f; padding: 12px 16px; border-radius: 6px; margin: 8px 0; color: #fcd34d; }
+    .gap-ok { color: #4ade80; font-weight: 600; }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .summary-cards { grid-template-columns: repeat(2, 1fr); }
+      .screenshot-grid { grid-template-columns: 1fr; }
+      .ac-section summary { flex-wrap: wrap; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Test Evidence Report</h1>
+      <div class="meta">
+        {{PROJECT_NAME}}<br>
+        Generated: {{TIMESTAMP}} | Duration: {{DURATION}}
+      </div>
+    </header>
+
+    <!-- Summary Cards -->
+    <div class="summary-cards">
+      <div class="card total"><div class="number">{{TOTAL}}</div><div class="label">Total Tests</div></div>
+      <div class="card pass"><div class="number">{{PASSED}}</div><div class="label">Passed</div></div>
+      <div class="card fail"><div class="number">{{FAILED}}</div><div class="label">Failed</div></div>
+      <div class="card duration"><div class="number">{{DURATION}}</div><div class="label">Total Duration</div></div>
+    </div>
+
+    <!-- Toolbar -->
+    <div class="toolbar">
+      <button onclick="toggleAll(true)">Expand All</button>
+      <button onclick="toggleAll(false)">Collapse All</button>
+      <button onclick="filterACs('all')" class="active" data-filter="all">All</button>
+      <button onclick="filterACs('pass')" data-filter="pass">Passing</button>
+      <button onclick="filterACs('fail')" data-filter="fail">Failing</button>
+    </div>
+
+    <!-- AC Traceability Matrix (clickable, linked to detail sections) -->
+    <section>
+      <h2>Acceptance Criteria Traceability</h2>
+      <table>
+        <thead>
+          <tr><th>AC</th><th>Description</th><th>Tests</th><th>Pass</th><th>Fail</th><th>Status</th></tr>
+        </thead>
+        <tbody id="ac-matrix">
+          <!-- {{AC_ROWS}} -->
+        </tbody>
+      </table>
+    </section>
+
+    <!-- AC Detail Sections (collapsible, grouped) -->
+    <div id="ac-details">
+      <!-- {{AC_DETAIL_SECTIONS}} -->
+    </div>
+
+    <!-- Edge Case / Security Summary -->
+    <section>
+      <h2>Edge Case &amp; Security Testing</h2>
+      <table class="security-table">
+        <thead>
+          <tr><th>Input</th><th>Endpoint</th><th>Expected</th><th>Actual</th><th>Result</th></tr>
+        </thead>
+        <tbody id="security-tests">
+          <!-- {{SECURITY_ROWS}} -->
+        </tbody>
+      </table>
+    </section>
+
+    <!-- Coverage Gap Analysis -->
+    <section>
+      <h2>Coverage Gap Analysis</h2>
+      <div id="gaps">
+        <!-- {{GAPS}} -->
+      </div>
+    </section>
+
+    <!-- Test Quality Review -->
+    <section>
+      <h2>Test Quality Review</h2>
+      <div id="review-summary">
+        <!-- {{REVIEW_SUMMARY}} -->
+      </div>
+    </section>
+  </div>
+
+  <!-- Lightbox for screenshot zoom -->
+  <div class="lightbox" id="lightbox" onclick="closeLightbox()">
+    <img id="lightbox-img" src="" alt="">
+    <div class="caption" id="lightbox-caption"></div>
+  </div>
+
+  <script>
+    // Expand / Collapse all AC sections
+    function toggleAll(open) {
+      document.querySelectorAll('.ac-section details').forEach(d => d.open = open);
+    }
+
+    // Filter AC sections by pass/fail
+    function filterACs(filter) {
+      document.querySelectorAll('.toolbar button[data-filter]').forEach(b => b.classList.remove('active'));
+      document.querySelector(`.toolbar button[data-filter="${filter}"]`).classList.add('active');
+      document.querySelectorAll('.ac-section').forEach(section => {
+        const status = section.dataset.status;
+        if (filter === 'all') section.style.display = '';
+        else if (filter === 'pass' && status === 'pass') section.style.display = '';
+        else if (filter === 'fail' && status !== 'pass') section.style.display = '';
+        else section.style.display = 'none';
+      });
+    }
+
+    // Traceability row click -> scroll to and open AC section
+    document.querySelectorAll('tr.ac-row').forEach(row => {
+      row.addEventListener('click', () => {
+        const ac = row.dataset.ac;
+        const section = document.getElementById('ac-' + ac);
+        if (section) {
+          const details = section.querySelector('details');
+          if (details) details.open = true;
+          section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      });
+    });
+
+    // Screenshot lightbox
+    function openLightbox(src, caption) {
+      document.getElementById('lightbox-img').src = src;
+      document.getElementById('lightbox-caption').textContent = caption;
+      document.getElementById('lightbox').classList.add('active');
+    }
+    function closeLightbox() {
+      document.getElementById('lightbox').classList.remove('active');
+    }
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') closeLightbox(); });
+  </script>
+</body>
+</html>

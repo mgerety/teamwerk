@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/run-hook.cmd\" lint-test-file.sh \"$CLAUDE_TOOL_ARG_file_path\""
+          }
+        ]
+      }
+    ]
+  }
+}
