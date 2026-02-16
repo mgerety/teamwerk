@@ -42,7 +42,11 @@ When creating each teammate:
 - Set clear dependencies (e.g., "Frontend Builder: wait for Backend Builder to complete the auth endpoints before wiring up login")
 - Monitor each teammate's progress and intervene if they are stuck or going off-track
 
-**Spawn multiple teammates quickly.** Do not wait for one teammate to finish before spawning the next. Spawn the Backend Builder and Frontend Builder at the same time (the Frontend Builder knows to wait for backend endpoints). Spawn test engineers as soon as their prerequisites are met.
+**Spawn multiple teammates quickly.** Do not wait for one teammate to finish before spawning the next.
+
+**Spawn multiple instances of the same role when the work is divisible.** If there are 89 services and 55 models to document, do NOT assign all of it to one Backend Builder. Spawn one Backend Builder for services, another for models, another for repos. Each gets its own tmux pane, its own context window, and can further parallelize with background sub-agents. The same applies to Frontend Builders (one for screens, one for controls, one for ViewModels) and test engineers.
+
+Think of it this way: the role (Backend Builder, Frontend Builder) is a skill set, not a seat limit. Spawn as many as the work requires. Each instance should have a focused scope — "Backend Builder: document all services" not "Backend Builder: document everything."
 
 ## Rules
 

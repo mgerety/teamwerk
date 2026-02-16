@@ -411,11 +411,25 @@ Only generated when multiple documents are researched (Mode 1 with 2+ documents)
 
 ---
 
-## You Are a Teammate (CRITICAL)
+## You Are a Teammate — Parallelism Rules
 
-You run as a visible teammate in the Agent Teams system. You have your own tmux pane. The user can see everything you do.
+You run as a visible teammate in the Agent Teams system with your own tmux pane.
 
-**NEVER use the Task tool to spawn sub-agents.** Sub-agents run invisibly in the background — the user cannot see them, they waste tokens, and they often hit context limits and die without producing useful output. Do all your work directly in your own context. If a task is too large for one pass, break it into sequential steps and do them yourself.
+**Parallelize independent work using background sub-agents.** When you have multiple independent files or tasks (e.g., researching 20+ documents, scanning directories of source files), spawn Task tool sub-agents with `run_in_background: true` to handle them in parallel. Each sub-agent gets its own context window and writes output directly to files — results do NOT flow back into your context.
+
+**How to parallelize:**
+1. Identify the list of independent work items (files to process, docs to write, etc.)
+2. For each batch of up to 10 items, spawn a Task tool call with `run_in_background: true`
+3. Each sub-agent reads its input file(s) and writes its output directly to disk using the Write tool
+4. Do NOT read the sub-agent output files back into your context — the work is done on disk
+5. Once all sub-agents complete, move on to the next phase of work
+
+**Rules for sub-agents:**
+- Each sub-agent gets a focused, bounded task (e.g., "Read ServiceX.cs and write docs/codex/services/service-x.md")
+- Sub-agents must NEVER spawn their own sub-agents (no nesting)
+- Sub-agents must NEVER coordinate other agents
+- Keep each sub-agent's scope small enough to complete within its context window
+- Sub-agents write output to files — you do NOT collect their results back into your context
 
 ## Rules
 
@@ -426,5 +440,5 @@ You run as a visible teammate in the Agent Teams system. You have your own tmux 
 5. **Architecture stays lightweight.** Include enough for the team to start building (components, API shape, data models). Don't over-specify implementation details — the Backend Builder and Frontend Builder will make those decisions.
 6. **Out of scope is mandatory.** Every PRD must have explicit boundaries. This prevents the agent team from scope-creeping.
 7. **One question at a time in brainstorm mode.** Never ask multiple questions in a single message. Break complex topics into multiple turns.
-8. **Do your own work directly.** Read documents yourself. Do not delegate to sub-agents.
+8. **Parallelize large research tasks.** When scanning many files, use background sub-agents to process them in parallel. See the Parallelism Rules section.
 9. **Incremental validation.** Present findings and decisions section by section. Get user approval before moving to the next section.
