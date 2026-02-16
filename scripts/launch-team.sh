@@ -83,9 +83,9 @@ tmux kill-session -t "$SESSION_NAME" 2>/dev/null || true
 # The claude CLI accepts a positional prompt and --append-system-prompt.
 # We use both so the Team Lead starts working immediately instead of sitting idle.
 # NOTE: Prompt strings must not contain double quotes, backslashes, or dollar signs.
-TEAM_SYSTEM="You are the Team Lead for a Teamwerk agent team. Use the team-lead skill for your full role definition and workflow. You coordinate the team -- you do not write implementation code yourself."
+TEAM_SYSTEM="You are the Team Lead for a Teamwerk agent team. Use the team-lead skill for your full role definition and workflow. You coordinate the team -- you do not write implementation code yourself. Do NOT explore the codebase or launch research agents. The PRD has everything you need."
 
-TEAM_PROMPT="Use the team-lead skill. Begin Phase 1: Read docs/prd.md, read docs/acceptance-criteria.md, check for teamwerk-config.yml, and read CLAUDE.md if present. Then plan the work breakdown and spawn your team."
+TEAM_PROMPT="Use the team-lead skill. Read ONLY these files: docs/prd.md, docs/acceptance-criteria.md, teamwerk-config.yml, CLAUDE.md. Do NOT explore the codebase. Then immediately break ACs into tasks and spawn your team. Be fast -- start spawning within minutes."
 
 tmux new-session -d -s "$SESSION_NAME" -c "$PROJECT_PATH" \
   "unset CLAUDECODE && export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 && claude --dangerously-skip-permissions --append-system-prompt \"$TEAM_SYSTEM\" \"$TEAM_PROMPT\""
