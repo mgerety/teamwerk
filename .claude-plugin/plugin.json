@@ -1,6 +1,6 @@
 {
   "name": "teamwerk",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "AI agent team orchestration with built-in test quality guardrails. Spawns coordinated agent teams, enforces Rule Zero (tests must never modify the application), generates evidence reports with AC traceability.",
   "author": {
     "name": "Michael Gerety"

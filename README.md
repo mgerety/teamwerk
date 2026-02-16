@@ -101,7 +101,7 @@ Teamwerk includes 8 skills:
 
 | Skill | Purpose |
 |-------|---------|
-| **project-analyst** | Brainstorms or parses project requirements — generates the PRD and acceptance criteria that drive the entire team |
+| **project-analyst** | Researches project documentation using sub-agents, brainstorms requirements with guided techniques (direct listing, failure analysis, starbursting), generates the PRD and acceptance criteria that drive the entire team |
 | **team-lead** | Coordinates the agent team, manages the task list, enforces build order, traces work from FRs to ACs to tasks |
 | **backend-builder** | Builds API/server endpoints with input validation, error handling, authentication, and security hardening |
 | **frontend-builder** | Builds the web UI with styled components, accessibility, XSS prevention, and responsive layout |
