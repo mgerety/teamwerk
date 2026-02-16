@@ -20,10 +20,13 @@ Initialize the current project for Teamwerk agent teams.
    b. **Node.js**: Run `which node`. If not found, tell the user: "Node.js is required for the test linter and report generator. Install it from https://nodejs.org" and stop.
 
    c. **Environment variable**: Check if `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` is set by running `echo $CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS`. If empty or not "1":
-      - Tell the user: "Agent Teams requires an environment variable. Add this to your shell profile:"
-      - Provide: `echo 'export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1' >> ~/.zshrc && source ~/.zshrc`
-      - (Use `~/.bashrc` if they're on bash)
-      - Note: This takes effect on next session. For this session, it will be set by the launch script.
+      - Ask: "Agent Teams requires the `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` environment variable. Want me to add it to your shell profile?"
+      - If user agrees:
+        - Detect shell: run `echo $SHELL`. Use `~/.zshrc` for zsh, `~/.bashrc` for bash.
+        - Run: `echo 'export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1' >> [profile] && source [profile]`
+        - Confirm: "✅ Environment variable added and loaded."
+      - If user declines, explain it's required for agent teams and stop.
+      - Note: The launch script also sets this for the session, so it works immediately either way.
 
    d. **Already initialized?**: Check if `docs/prd.md` exists. If it does, ask: "This project has already been initialized. Do you want to re-initialize (overwrite existing docs) or skip to /launch-team?"
 
