@@ -63,7 +63,8 @@ echo ""
 echo "Project:  $PROJECT_PATH"
 echo "Session:  $SESSION_NAME"
 echo ""
-echo "Once inside, instruct Claude to read your team prompt and begin."
+echo "The Team Lead will start automatically -- reading your PRD and kicking off the workflow."
+echo "Attach to observe or interact at any time."
 echo ""
 echo "tmux cheatsheet:"
 echo "  Detach (keep running):  Ctrl+B then D"
@@ -78,16 +79,24 @@ fi
 
 tmux kill-session -t "$SESSION_NAME" 2>/dev/null || true
 
+# --- Team Lead auto-start prompt ---
+# The claude CLI accepts a positional prompt and --append-system-prompt.
+# We use both so the Team Lead starts working immediately instead of sitting idle.
+# NOTE: Prompt strings must not contain double quotes, backslashes, or dollar signs.
+TEAM_SYSTEM="You are the Team Lead for a Teamwerk agent team. Use the team-lead skill for your full role definition and workflow. You coordinate the team -- you do not write implementation code yourself."
+
+TEAM_PROMPT="Use the team-lead skill. Begin Phase 1: Read docs/prd.md, read docs/acceptance-criteria.md, check for teamwerk-config.yml, and read CLAUDE.md if present. Then plan the work breakdown and spawn your team."
+
 tmux new-session -d -s "$SESSION_NAME" -c "$PROJECT_PATH" \
-  "export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 && claude --dangerously-skip-permissions"
+  "export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 && claude --dangerously-skip-permissions --append-system-prompt \"$TEAM_SYSTEM\" \"$TEAM_PROMPT\""
 
 # Only attach if we have a real terminal (TTY). When launched from Claude Code
 # or other non-interactive contexts, just report success and show the attach command.
 if [ -t 0 ] && [ -t 1 ]; then
   tmux attach-session -t "$SESSION_NAME"
 else
-  echo "✅ tmux session '$SESSION_NAME' is running."
+  echo "✅ tmux session '$SESSION_NAME' is running. Team Lead is starting automatically."
   echo ""
-  echo "To connect, open a terminal and run:"
+  echo "To observe progress, open a terminal and run:"
   echo "  tmux attach -t $SESSION_NAME"
 fi

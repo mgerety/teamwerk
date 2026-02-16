@@ -25,11 +25,11 @@ Launch an agent team for the current project using tmux.
    ```
    This script sets `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` and starts a tmux session with the agent team.
 
-5. **Explain next steps.** Tell the user:
-   - The team is now running inside a tmux session.
-   - The Team Lead will read `docs/prd.md` and `docs/acceptance-criteria.md` to understand what to build.
-   - The Team Lead will then spawn the other agents and coordinate the work.
-   - Each agent has a dedicated tmux pane so you can observe their work in parallel.
+5. **Explain what's happening.** Tell the user:
+   - The team has launched and the Team Lead is **already working** -- reading the PRD, acceptance criteria, and project config.
+   - The Team Lead will automatically spawn the other agents (Backend Builder, Frontend Builder, API Test Engineer, UI Test Engineer, Test Reviewer) and coordinate the work.
+   - Attach to the tmux session to observe progress or interact with the Team Lead at any time.
+   - The team runs autonomously -- no further instructions needed unless you want to intervene.
 
 6. **Provide the tmux cheatsheet:**
    - Detach from the session: `Ctrl+B` then `D`
