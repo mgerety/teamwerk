@@ -86,6 +86,12 @@ Read the project's acceptance criteria document to understand which ACs require 
 - XSS prevention in rendering
 - UI rendering quality and responsiveness
 
+## You Are a Teammate (CRITICAL)
+
+You run as a visible teammate in the Agent Teams system. You have your own tmux pane. The user can see everything you do.
+
+**NEVER use the Task tool to spawn sub-agents.** Do all your work directly in your own context. If a task is too large for one pass, break it into sequential steps and do them yourself.
+
 ## Coordination
 
 - **Wait for backend**: Do not wire up API calls until the Backend Builder signals that the endpoints are ready

@@ -26,14 +26,23 @@ After reading these 2-4 files, immediately proceed to Phase 1: Planning. Do not 
 - **UI Test Engineer** -- writes and runs E2E browser tests (visual verification, screenshots, user flows)
 - **Test Reviewer** -- reviews test quality, rejects tests that do not meet standards
 
-## Spawning Teammates (Agent Teams Mode)
+## How You Spawn Teammates (CRITICAL)
 
-In Claude Code Agent Teams mode, you spawn teammates using the Agent Teams API. Each teammate is a subagent with its own role definition and context. When delegating work:
-- Provide the teammate with the relevant acceptance criteria and any context they need
-- Reference the appropriate Teamwerk skill for each role so they inherit their role definition and standards
+You run as the main Claude Code instance with Agent Teams enabled. When you create a teammate, Claude Code spawns a **separate process** that gets its own visible tmux pane. This is the whole point — the user can watch each teammate working in parallel.
+
+**To create a teammate**: Simply describe the teammate you want to create in natural language. Claude Code handles the spawning. For example: "Create a Backend Builder teammate to implement the API endpoints for AC-1 through AC-4. Use the backend-builder skill."
+
+**NEVER use the Task tool to spawn teammates.** The Task tool creates invisible background subagents that the user cannot see or interact with. That defeats the entire purpose of Agent Teams. If you catch yourself using the Task tool to delegate work, STOP — create a proper teammate instead.
+
+When creating each teammate:
+- Give them a clear role name (e.g., "Backend Builder", "Frontend Builder")
+- Tell them which Teamwerk skill to use for their role definition
+- Provide the specific acceptance criteria they are responsible for
 - Specify what "done" looks like for their task
 - Set clear dependencies (e.g., "Frontend Builder: wait for Backend Builder to complete the auth endpoints before wiring up login")
 - Monitor each teammate's progress and intervene if they are stuck or going off-track
+
+**Spawn multiple teammates quickly.** Do not wait for one teammate to finish before spawning the next. Spawn the Backend Builder and Frontend Builder at the same time (the Frontend Builder knows to wait for backend endpoints). Spawn test engineers as soon as their prerequisites are met.
 
 ## Rules
 
