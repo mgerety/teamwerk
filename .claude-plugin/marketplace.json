@@ -8,7 +8,7 @@
     {
       "name": "teamwerk",
       "description": "AI agent team orchestration with test quality guardrails",
-      "version": "0.4.0",
+      "version": "0.5.0",
       "source": "./",
       "author": {
         "name": "Michael Gerety"

@@ -28,7 +28,17 @@ Initialize the current project for Teamwerk agent teams.
       - If user declines, explain it's required for agent teams and stop.
       - Note: The launch script also sets this for the session, so it works immediately either way.
 
-   d. **Already initialized?**: Check if `docs/prd.md` exists. If it does, ask: "This project has already been initialized. Do you want to re-initialize (overwrite existing docs) or skip to /launch-team?"
+   d. **Global `teamwerk` command**: Run `which teamwerk`. If not found:
+      - Ask: "Want me to install the `teamwerk` command so you can launch teams from any terminal?"
+      - If user agrees:
+        - On macOS with Homebrew: Run `ln -sf "${CLAUDE_PLUGIN_ROOT}/scripts/launch-team.sh" /opt/homebrew/bin/teamwerk`
+        - Otherwise: Run `ln -sf "${CLAUDE_PLUGIN_ROOT}/scripts/launch-team.sh" /usr/local/bin/teamwerk`
+        - If permission denied, try with `sudo`
+        - Confirm: "✅ `teamwerk` command installed. Run `teamwerk` from any terminal to launch a team."
+      - If user declines, explain they can always run the launch script manually.
+      - If already exists: Skip silently.
+
+   e. **Already initialized?**: Check if `docs/prd.md` exists. If it does, ask: "This project has already been initialized. Do you want to re-initialize (overwrite existing docs) or skip?"
 
 2. **Discover the project** (silently, no user interaction needed).
 
@@ -103,5 +113,5 @@ Initialize the current project for Teamwerk agent teams.
    ⚙️  Config: teamwerk-config.yml ([overlay] overlay)
    📝 CLAUDE.md: updated
 
-   Next: Review your docs, then run /launch-team to start the agent team.
+   Next: Review your docs, then open a terminal and run: teamwerk
    ```
