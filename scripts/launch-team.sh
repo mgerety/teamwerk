@@ -48,8 +48,15 @@ if [ -z "$SESSION_NAME" ]; then
 fi
 
 # --- Preflight checks ---
-command -v tmux >/dev/null 2>&1 || { echo "Error: tmux not installed. Run: brew install tmux"; exit 1; }
+command -v tmux >/dev/null 2>&1 || { echo "Error: tmux not installed. Run: brew install tmux (macOS) or apt install tmux (Linux)"; exit 1; }
 command -v claude >/dev/null 2>&1 || { echo "Error: claude CLI not found"; exit 1; }
+
+# Check if project is initialized
+if [ ! -f "$PROJECT_PATH/docs/prd.md" ] && [ ! -f "$PROJECT_PATH/docs/acceptance-criteria.md" ]; then
+  echo "Warning: Project not initialized. Run /init first to generate PRD and acceptance criteria."
+  echo "Continuing anyway, but the Team Lead may not have enough context."
+  echo ""
+fi
 
 echo "=== Teamwerk — Agent Team Launch ==="
 echo ""

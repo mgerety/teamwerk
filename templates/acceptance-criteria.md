@@ -1,35 +1,34 @@
 # Acceptance Criteria
 
-This document defines the acceptance criteria for the project. Every code change must trace to an AC. Every test must reference its AC by name.
+Every code change must trace to an AC. Every test must reference its AC by ID.
 
-## Format
-
-Each AC has:
-- **ID**: AC-1, AC-2, etc.
-- **Title**: Short description
-- **Given/When/Then**: Behavior specification
-- **Minimum tests**: How many tests this AC needs (default: 3)
+ACs are derived from the functional requirements in `docs/prd.md`. Each AC ID traces to its parent FR (e.g., AC-1.1 traces to FR-01).
 
 ---
 
-## AC-1: [Feature Name]
-
+## AC-1.1: [Testable behavior from FR-01]
+**Traces to**: FR-01
 **Given** [precondition]
 **When** [action]
 **Then** [expected result]
-
 Minimum tests: 3 (happy path, error case, edge case)
 
----
-
-## AC-2: [Feature Name]
-
+## AC-1.2: [Another testable behavior from FR-01]
+**Traces to**: FR-01
 **Given** [precondition]
 **When** [action]
 **Then** [expected result]
-
 Minimum tests: 3
 
 ---
 
-<!-- Add more ACs as needed. The report generator will parse AC-X patterns from test names and map them to these definitions. -->
+## AC-2.1: [Testable behavior from FR-02]
+**Traces to**: FR-02
+**Given** [precondition]
+**When** [action]
+**Then** [expected result]
+Minimum tests: 3
+
+---
+
+<!-- Add more ACs as needed. Each AC-X.Y traces to FR-X in the PRD. The report generator parses AC-X.Y patterns from test names and maps them to these definitions. -->
