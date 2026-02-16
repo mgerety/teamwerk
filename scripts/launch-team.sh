@@ -71,7 +71,7 @@ echo "  Reattach:               tmux attach -t $SESSION_NAME"
 echo "  Kill:                   tmux kill-session -t $SESSION_NAME"
 echo ""
 
-if [ "$NO_INTERACTIVE" = false ]; then
+if [ "$NO_INTERACTIVE" = false ] && [ -t 0 ]; then
   echo "Press Enter to launch..."
   read -r
 fi
@@ -81,4 +81,13 @@ tmux kill-session -t "$SESSION_NAME" 2>/dev/null || true
 tmux new-session -d -s "$SESSION_NAME" -c "$PROJECT_PATH" \
   "export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 && claude --dangerously-skip-permissions"
 
-tmux attach-session -t "$SESSION_NAME"
+# Only attach if we have a real terminal (TTY). When launched from Claude Code
+# or other non-interactive contexts, just report success and show the attach command.
+if [ -t 0 ] && [ -t 1 ]; then
+  tmux attach-session -t "$SESSION_NAME"
+else
+  echo "✅ tmux session '$SESSION_NAME' is running."
+  echo ""
+  echo "To connect, open a terminal and run:"
+  echo "  tmux attach -t $SESSION_NAME"
+fi
