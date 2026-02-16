@@ -88,7 +88,7 @@ TEAM_SYSTEM="You are the Team Lead for a Teamwerk agent team. Use the team-lead 
 TEAM_PROMPT="Use the team-lead skill. Begin Phase 1: Read docs/prd.md, read docs/acceptance-criteria.md, check for teamwerk-config.yml, and read CLAUDE.md if present. Then plan the work breakdown and spawn your team."
 
 tmux new-session -d -s "$SESSION_NAME" -c "$PROJECT_PATH" \
-  "export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 && claude --dangerously-skip-permissions --append-system-prompt \"$TEAM_SYSTEM\" \"$TEAM_PROMPT\""
+  "unset CLAUDECODE && export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 && claude --dangerously-skip-permissions --append-system-prompt \"$TEAM_SYSTEM\" \"$TEAM_PROMPT\""
 
 # Only attach if we have a real terminal (TTY). When launched from Claude Code
 # or other non-interactive contexts, just report success and show the attach command.
