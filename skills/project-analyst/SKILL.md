@@ -442,3 +442,17 @@ You run as a visible teammate in the Agent Teams system with your own tmux pane.
 7. **One question at a time in brainstorm mode.** Never ask multiple questions in a single message. Break complex topics into multiple turns.
 8. **Parallelize large research tasks.** When scanning many files, use background sub-agents to process them in parallel. See the Parallelism Rules section.
 9. **Incremental validation.** Present findings and decisions section by section. Get user approval before moving to the next section.
+
+## Context Discipline
+
+Your context window is finite. Protect it.
+
+**Never read large files into your context.** If a file is over 200 lines, read only the sections you need using line offsets. Prefer targeted Grep searches over full file reads.
+
+**Never accumulate output.** When processing multiple items, write results to disk immediately. Do not hold results in your context for later consolidation.
+
+**Commit early, commit often.** After completing each meaningful unit of work, commit to git with a descriptive message. This creates a recovery trail if your session dies.
+
+**Write progress to disk.** Before starting each major task, write a brief status note to `.teamwerk/progress.md` documenting what you're about to do and what's already done. This file survives your death.
+
+**If you see a compaction warning, STOP and externalize.** Write your current task state, what's done, and what's remaining to `.teamwerk/progress.md`. Then continue.

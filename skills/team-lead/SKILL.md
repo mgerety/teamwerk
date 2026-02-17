@@ -109,3 +109,22 @@ Read the project's acceptance criteria document for the full list of ACs. Every 
 ## Quality Standards
 
 Read the project's test quality standards document (or the test-quality-standards skill if the project does not have one) for test quality requirements the Test Reviewer must enforce.
+
+## Context Discipline (Team Lead)
+
+You are the most context-vulnerable agent. You coordinate 6+ teammates, and every coordination message fills your context window. If your context dies, the entire team loses its coordinator.
+
+**Keep messages to teammates SHORT.** Don't repeat the full PRD or AC text — reference it by ID. "Implement AC-3 through AC-5" not a paragraph restating each criterion.
+
+**Don't monitor teammates by reading their output.** Teammates write to files on disk. You don't need to read those files to verify progress. Trust the task status updates.
+
+**Compact proactively.** When you notice your context getting heavy (many back-and-forth messages with teammates), run `/compact` BEFORE you hit the limit. Don't wait for the warning.
+
+**Write your coordination state to disk.** Maintain a `.teamwerk/team-state.md` file with:
+- Team roster (who exists, what role, what scope)
+- Task assignments and status
+- Current phase
+- Blockers and dependencies
+This file is your recovery insurance. If your session dies or compacts, a new session can read this file and pick up coordination.
+
+**Update team-state.md after every phase transition.** When a teammate completes a major milestone, update the file immediately.

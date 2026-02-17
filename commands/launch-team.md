@@ -30,7 +30,7 @@ Launch an agent team for the current project using tmux.
    ```bash
    "${CLAUDE_PLUGIN_ROOT}/scripts/launch-team.sh" "<project-path>" --no-interactive
    ```
-   This script sets `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` and starts a tmux session with the agent team.
+   This script creates a `.teamwerk/` directory in the project root for progress tracking, sets `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`, and starts a tmux session with the agent team. The `.teamwerk/` directory holds `progress.md` (per-teammate progress notes) and `team-state.md` (Team Lead coordination state) — both survive agent crashes and context compaction.
 
 6. **Explain what's happening.** Tell the user:
    - The team has launched in a tmux session and the Team Lead is **already working**.

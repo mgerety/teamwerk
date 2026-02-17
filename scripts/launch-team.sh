@@ -79,11 +79,14 @@ fi
 
 tmux kill-session -t "$SESSION_NAME" 2>/dev/null || true
 
+# --- Create .teamwerk/ directory for progress tracking ---
+mkdir -p "$PROJECT_PATH/.teamwerk"
+
 # --- Team Lead auto-start prompt ---
 # The claude CLI accepts a positional prompt and --append-system-prompt.
 # We use both so the Team Lead starts working immediately instead of sitting idle.
 # NOTE: Prompt strings must not contain double quotes, backslashes, or dollar signs.
-TEAM_SYSTEM="You are the Team Lead for a Teamwerk agent team. Use the team-lead skill for your full role definition and workflow. You coordinate the team -- you do not write implementation code yourself. Do NOT explore the codebase or launch research agents. The PRD has everything you need."
+TEAM_SYSTEM="You are the Team Lead for a Teamwerk agent team. Use the team-lead skill for your full role definition and workflow. You coordinate the team -- you do not write implementation code yourself. Do NOT explore the codebase or launch research agents. The PRD has everything you need. COMPACT INSTRUCTIONS: When compacting, ALWAYS preserve: the full team roster (which teammates exist and their roles), all task assignments and their current status, which acceptance criteria are done vs remaining, current phase of work, and any blockers or dependencies between teammates. After compaction, re-read .teamwerk/team-state.md to restore coordination state."
 
 TEAM_PROMPT="Use the team-lead skill. Read ONLY these files: docs/prd.md, docs/acceptance-criteria.md, teamwerk-config.yml, CLAUDE.md. Do NOT explore the codebase. Then immediately break ACs into tasks and spawn your team. Be fast -- start spawning within minutes."
 
