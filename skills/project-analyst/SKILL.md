@@ -377,6 +377,13 @@ Every code change must trace to an AC. Every test must reference its AC by ID.
 
 ACs are derived from the functional requirements in `docs/prd.md`. Each AC ID traces to its parent FR.
 
+## Status Legend
+- **DONE** — Completed and verified. Filtered from Team Lead's work list on next launch.
+- **ACTIVE** — Currently in progress.
+- **OPEN** — Not yet started (default if no marker present).
+
+Mark ACs done by appending ` — DONE` to the heading, or by adding `**Status**: DONE` on the line after the heading.
+
 ---
 
 ## AC-1.1: [Testable behavior from FR-01]
@@ -452,6 +459,12 @@ Your context window is finite. Protect it.
 **Never accumulate output.** When processing multiple items, write results to disk immediately. Do not hold results in your context for later consolidation.
 
 **Commit early, commit often.** After completing each meaningful unit of work, commit to git with a descriptive message. This creates a recovery trail if your session dies.
+
+**Pre-commit branch check (once per session).** Before your FIRST commit, verify you are not on a protected branch:
+1. Run `git rev-parse --abbrev-ref HEAD` to get the current branch name
+2. If the branch is `main`, `master`, or `develop` — STOP. Tell the Team Lead: "I am on a protected branch and cannot commit."
+3. Only commit if you are on a work branch (e.g., `feature/...`, `fix/...`, `bugfix/...`)
+After the first successful commit, the branch is confirmed safe — no need to check again.
 
 **Write progress to disk.** Before starting each major task, write a brief status note to `.teamwerk/progress.md` documenting what you're about to do and what's already done. This file survives your death.
 

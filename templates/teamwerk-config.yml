@@ -6,10 +6,34 @@ project:
   name: "My Project"
   description: ""
 
-# Acceptance criteria source
-acceptance-criteria:
-  # Path to your AC document (relative to project root)
-  path: "docs/acceptance-criteria.md"
+# Work items — what we're building now
+work-items:
+  # Source type: markdown (default) | ado (future) | jira (future)
+  source: markdown
+
+  # Active work items (file or directory path, relative to project root)
+  # File:      "docs/acceptance-criteria.md" (default, backward compatible)
+  # Directory: "docs/work-items/" (reads all .md files in directory as active)
+  active: "docs/acceptance-criteria.md"
+
+  # Per-AC status tracking (applies to both file and directory modes)
+  # ACs can be marked with inline status: "## AC-1.1: Description — DONE"
+  # Or with a structured field:  **Status**: DONE | ACTIVE | OPEN
+  # ACs without a status marker default to OPEN.
+  # The Team Lead only loads OPEN and ACTIVE ACs as available work.
+  # DONE ACs are counted for context but not loaded, saving tokens.
+
+  # Where completed work items are archived (file-level archival, optional)
+  # Team Lead moves done ACs here after shipping (docs/done/YYYY-MM-DD-slug.md)
+  done: "docs/done/"
+
+  # Where future work items live before promotion to active
+  # Not loaded by Team Lead — user promotes manually
+  backlog: "docs/backlog/"
+
+# Legacy format (still supported — parser falls back to this if work-items is missing):
+# acceptance-criteria:
+#   path: "docs/acceptance-criteria.md"
 
 # Test configuration
 tests:
@@ -58,6 +82,69 @@ team:
     - team-lead
     - backend-builder
     - frontend-builder
+    - test-designer
     - api-test-engineer
     - ui-test-engineer
     - test-reviewer
+    - adversarial-reviewer
+
+# Git workflow configuration
+git:
+  # Branching strategy: github-flow | trunk-based | gitflow | none
+  # github-flow: feature branches off main, PRs back to main (recommended for most teams)
+  # trunk-based: short-lived branches, frequent merges to main
+  # gitflow: develop + feature/bugfix/hotfix/release branches
+  # none: no branch management — agents work on whatever branch is checked out
+  strategy: github-flow
+
+  # Branches that agents must NEVER commit to directly
+  # Defaults by strategy if omitted:
+  #   github-flow:  [main]
+  #   trunk-based:  [main]
+  #   gitflow:      [main, develop]
+  #   none:         [] (no protection)
+  protected-branches:
+    - main
+
+  # Branch type prefix for auto-created work branches
+  # Valid: feature, fix, bugfix, hotfix, docs, chore, refactor, release
+  branch-prefix: feature
+
+  # PR target branch (where the draft PR points)
+  # Defaults: github-flow/trunk-based -> main, gitflow -> develop
+  pr-target: main
+
+  # Whether the Team Lead creates a draft PR when work is complete
+  # Default: true (unless strategy is "none")
+  create-pr: true
+
+# Testing configuration
+testing:
+  # Test framework: playwright | maestro | jest | dotnet-test | pytest | auto
+  # "auto" detects from project files (default)
+  framework: auto
+
+  # Test result format for report generation
+  # playwright-json: Playwright JSON reporter output
+  # junit-xml: JUnit XML format (Maestro, Java, pytest --junitxml)
+  # trx: Visual Studio TRX format (.NET)
+  # auto: detect from file extension/content
+  result-format: auto
+
+  # Session sharing strategy
+  # shared-session: Login once, share auth state across tests (recommended)
+  # per-test: Each test handles its own auth (slower, more isolated)
+  # none: App doesn't require auth
+  session-strategy: shared-session
+
+  # Where test results live (framework-specific defaults if omitted)
+  # Defaults by framework:
+  #   playwright:   test-results.json
+  #   maestro:      build/test-results/
+  #   dotnet-test:  TestResults/
+  #   pytest:       test-results.xml
+  #   jest:         test-results.json
+  results-path: ""
+
+  # Where screenshots/evidence are stored
+  evidence-dir: "tests/evidence/"

@@ -4,6 +4,13 @@ Every code change must trace to an AC. Every test must reference its AC by ID.
 
 ACs are derived from the functional requirements in `docs/prd.md`. Each AC ID traces to its parent FR (e.g., AC-1.1 traces to FR-01).
 
+## Status Legend
+- **DONE** — Completed and verified. Filtered from Team Lead's work list on next launch.
+- **ACTIVE** — Currently in progress.
+- **OPEN** — Not yet started (default if no marker present).
+
+Mark ACs done by appending ` — DONE` to the heading, or by adding `**Status**: DONE` on the line after the heading. The Team Lead will automatically filter DONE ACs from the work list.
+
 ---
 
 ## AC-1.1: [Testable behavior from FR-01]

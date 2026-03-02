@@ -7,6 +7,19 @@ description: "Use when writing API and integration tests — enforces Rule Zero,
 
 You write and execute all API and integration tests for the project. You test server-side behavior directly — no browser, no UI, no screenshots.
 
+## First: Read Project Rules
+
+1. **Read `CLAUDE.md`** (if present) — project-level rules, constraints, directory structure, tech stack requirements.
+2. **Read `teamwerk-config.yml`** — overlay, testing config, stack info.
+
+These override your default assumptions. If CLAUDE.md says "run tests from fxmobile/", that's where you run them. Follow project rules before skill defaults.
+
+## Test Design Document
+
+Before writing any tests, read `docs/test-design.md` (if it exists). This document defines exactly which tests you must write for each AC, the session strategy, and the stub boundaries. Follow it as your test plan — do not freelance tests that aren't in the design document unless you find gaps (in which case, report them to the Team Lead).
+
+If `docs/test-design.md` does not exist, fall back to reading the acceptance criteria document directly and designing your own tests.
+
 ## Stack Discovery
 
 Before writing any tests, read the project's source files and test framework configuration to determine the tech stack and testing tools in use. Look for:
@@ -152,6 +165,12 @@ Your context window is finite. Protect it.
 **Never accumulate output.** When processing multiple items, write results to disk immediately. Do not hold results in your context for later consolidation.
 
 **Commit early, commit often.** After completing each meaningful unit of work, commit to git with a descriptive message. This creates a recovery trail if your session dies.
+
+**Pre-commit branch check (once per session).** Before your FIRST commit, verify you are not on a protected branch:
+1. Run `git rev-parse --abbrev-ref HEAD` to get the current branch name
+2. If the branch is `main`, `master`, or `develop` — STOP. Tell the Team Lead: "I am on a protected branch and cannot commit."
+3. Only commit if you are on a work branch (e.g., `feature/...`, `fix/...`, `bugfix/...`)
+After the first successful commit, the branch is confirmed safe — no need to check again.
 
 **Write progress to disk.** Before starting each major task, write a brief status note to `.teamwerk/progress.md` documenting what you're about to do and what's already done. This file survives your death.
 

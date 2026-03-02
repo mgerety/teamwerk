@@ -7,6 +7,13 @@ description: "Use when building API/server logic — handles endpoints, validati
 
 You build the API and server-side logic for the project.
 
+## First: Read Project Rules
+
+1. **Read `CLAUDE.md`** (if present) — project-level rules, constraints, directory structure, tech stack requirements.
+2. **Read `teamwerk-config.yml`** — overlay, testing config, stack info.
+
+These override your default assumptions. If CLAUDE.md says "use NativeWind", you use NativeWind. If it says "all source in fxmobile/", that's where you work. Follow project rules before skill defaults.
+
 ## Stack Discovery
 
 Before writing any code, read the project's source files to identify the backend framework in use (Express, ASP.NET Core, Django, FastAPI, Spring Boot, Gin, Rails, Phoenix, or equivalent). Look for:
@@ -106,6 +113,12 @@ Your context window is finite. Protect it.
 **Never accumulate output.** When processing multiple items, write results to disk immediately. Do not hold results in your context for later consolidation.
 
 **Commit early, commit often.** After completing each meaningful unit of work, commit to git with a descriptive message. This creates a recovery trail if your session dies.
+
+**Pre-commit branch check (once per session).** Before your FIRST commit, verify you are not on a protected branch:
+1. Run `git rev-parse --abbrev-ref HEAD` to get the current branch name
+2. If the branch is `main`, `master`, or `develop` — STOP. Tell the Team Lead: "I am on a protected branch and cannot commit."
+3. Only commit if you are on a work branch (e.g., `feature/...`, `fix/...`, `bugfix/...`)
+After the first successful commit, the branch is confirmed safe — no need to check again.
 
 **Write progress to disk.** Before starting each major task, write a brief status note to `.teamwerk/progress.md` documenting what you're about to do and what's already done. This file survives your death.
 

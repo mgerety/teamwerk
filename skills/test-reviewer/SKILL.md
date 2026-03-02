@@ -69,6 +69,17 @@ For security-related ACs (input validation, injection prevention), are there REA
 
 **How to check**: Look for real attack strings like `'; DROP TABLE`, `<script>alert`, not just empty strings or wrong types.
 
+### 8. Test Design Compliance
+
+If `docs/test-design.md` exists, verify that:
+1. Every test in the design document has been implemented — check test IDs (e.g., AC1-T1, AC1-T2) against actual test files
+2. No "freelance" tests exist that aren't in the design (unless they fill genuine gaps — in which case, note them as additions)
+3. Session strategy matches the design — if the design says `shared-session`, verify tests actually use `storageState` or equivalent, not per-test login
+4. Stub boundaries are respected — no tests that test stubbed features as if they work (check the MAY STUB list)
+5. Test types match the design — if the design says "API test," it should not be an E2E test, and vice versa
+
+If `docs/test-design.md` does not exist, skip this check.
+
 ## Your Review Process
 
 1. Read all tests submitted by the Test Engineer
@@ -133,6 +144,12 @@ Your context window is finite. Protect it.
 **Never accumulate output.** When processing multiple items, write results to disk immediately. Do not hold results in your context for later consolidation.
 
 **Commit early, commit often.** After completing each meaningful unit of work, commit to git with a descriptive message. This creates a recovery trail if your session dies.
+
+**Pre-commit branch check (once per session).** Before your FIRST commit, verify you are not on a protected branch:
+1. Run `git rev-parse --abbrev-ref HEAD` to get the current branch name
+2. If the branch is `main`, `master`, or `develop` — STOP. Tell the Team Lead: "I am on a protected branch and cannot commit."
+3. Only commit if you are on a work branch (e.g., `feature/...`, `fix/...`, `bugfix/...`)
+After the first successful commit, the branch is confirmed safe — no need to check again.
 
 **Write progress to disk.** Before starting each major task, write a brief status note to `.teamwerk/progress.md` documenting what you're about to do and what's already done. This file survives your death.
 

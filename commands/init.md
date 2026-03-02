@@ -38,7 +38,67 @@ Initialize the current project for Teamwerk agent teams.
       - If user declines, explain they can always run the launch script manually.
       - If already exists: Skip silently.
 
-   e. **Already initialized?**: Check if `docs/prd.md` exists. If it does, ask: "This project has already been initialized. Do you want to re-initialize (overwrite existing docs) or skip?"
+   e. **Git workflow**: Ask the user:
+      > "What git branching strategy do you use?"
+      >
+      > **(a) GitHub Flow** — feature branches off `main`, PRs back to `main` (recommended for most projects)
+      > **(b) Trunk-Based Development** — short-lived branches, frequent merges to `main`
+      > **(c) GitFlow** — `develop` branch with feature/bugfix/hotfix/release branches
+      > **(d) None** — no branch management, agents work on whatever branch is checked out
+
+      Based on the answer, set the `git:` section in `teamwerk-config.yml` with appropriate defaults:
+      - **(a) github-flow**: protected `[main]`, prefix `feature`, pr-target `main`
+      - **(b) trunk-based**: protected `[main]`, prefix `feature`, pr-target `main`
+      - **(c) gitflow**: protected `[main, develop]`, prefix `feature`, pr-target `develop`
+      - **(d) none**: no git section needed (or `strategy: none`)
+
+      If the user picks (a), (b), or (c), also ask:
+      > "Should the Team Lead create a draft PR when work is complete? (yes/no, default: yes)"
+
+      If PR creation is enabled, check for `gh` CLI: run `which gh`. If not found:
+      - Ask: "The `gh` CLI is needed for draft PR creation. Want me to install it? (`brew install gh`)"
+      - If user agrees, run `brew install gh`
+      - If user declines, set `create-pr: false` and note that PRs will need to be created manually
+
+   f. **Testing framework**: Ask the user:
+      > "What testing framework does your project use?"
+      >
+      > **(a) Playwright** — browser automation for web apps (recommended for web)
+      > **(b) Maestro** — YAML-based mobile testing for React Native, iOS, Android
+      > **(c) .NET Test** — dotnet test with MSTest/NUnit/xUnit
+      > **(d) pytest** — Python testing framework
+      > **(e) Jest** — JavaScript unit/integration testing
+      > **(f) Auto-detect** — let Teamwerk figure it out from project files (default)
+
+      Based on the answer, set the `testing:` section in `teamwerk-config.yml`:
+      - **(a) playwright**: framework `playwright`, result-format `playwright-json`
+      - **(b) maestro**: framework `maestro`, result-format `junit-xml`
+      - **(c) dotnet-test**: framework `dotnet-test`, result-format `trx`
+      - **(d) pytest**: framework `pytest`, result-format `junit-xml`
+      - **(e) jest**: framework `jest`, result-format `playwright-json`
+      - **(f) auto**: framework `auto`, result-format `auto`
+
+      Also ask:
+      > "Does your app require login? If so, should tests share a login session for efficiency?"
+      >
+      > **(a) Shared session** — login once, share across tests (recommended)
+      > **(b) Per-test** — each test logs in independently
+      > **(c) No auth** — app doesn't require login
+
+      Set `session-strategy` accordingly: `shared-session`, `per-test`, or `none`.
+
+   g. **Already initialized?**: Check if `docs/prd.md` exists. If it does, ask:
+      > "This project has already been initialized. What would you like to do?"
+      >
+      > **(a) Add new acceptance criteria** — generate additional ACs from new requirements and append to active work items
+      > **(b) Re-initialize** — overwrite existing PRD and ACs (destructive)
+      > **(c) Skip** — keep existing docs, just update config and prerequisites
+
+      For option (a):
+      - Ask for the new requirements (file path, URL, or paste content)
+      - Use the **project-analyst** skill to generate new ACs with IDs that do NOT conflict with existing ones (read existing ACs first to find the highest ID)
+      - Append the new ACs to the active work items file (from `work-items.active` config or `docs/acceptance-criteria.md`)
+      - Skip PRD regeneration — the existing PRD is kept
 
 2. **Discover the project** (silently, no user interaction needed).
 
@@ -72,12 +132,16 @@ Initialize the current project for Teamwerk agent teams.
 
    a. **`teamwerk-config.yml`**: Create at project root with:
       - Project name (from PRD)
-      - Acceptance criteria path: `docs/acceptance-criteria.md`
+      - Work items config: `work-items.source: markdown`, `work-items.active: "docs/acceptance-criteria.md"`, `work-items.done: "docs/done/"`, `work-items.backlog: "docs/backlog/"`
       - Test directories (detected or default)
       - Test file patterns (based on stack)
       - Report output path
       - Stack overlay (detected)
-      - Team roles (all 6 by default)
+      - Team roles (all 8 by default: team-lead, backend-builder, frontend-builder, test-designer, api-test-engineer, ui-test-engineer, test-reviewer, adversarial-reviewer)
+      - Git workflow config (from step 1e): strategy, protected-branches, branch-prefix, pr-target, create-pr
+      - Testing config (from step 1f): framework, result-format, session-strategy, results-path, evidence-dir
+
+   a2. **`docs/done/` and `docs/backlog/`**: Create these empty directories for the work item lifecycle. The Team Lead uses `docs/done/` to archive completed ACs and `docs/backlog/` stores future work items.
 
    b. **`CLAUDE.md`**: Create or append to the project's CLAUDE.md with:
       ```
@@ -109,8 +173,12 @@ Initialize the current project for Teamwerk agent teams.
    ✅ Environment: configured
 
    📄 PRD: docs/prd.md
-   📋 Acceptance Criteria: docs/acceptance-criteria.md (X ACs from Y FRs)
+   📋 Work Items: docs/acceptance-criteria.md (X active ACs)
+   📁 Backlog: docs/backlog/ (empty)
+   📁 Archive: docs/done/ (empty)
    ⚙️  Config: teamwerk-config.yml ([overlay] overlay)
+   🔀 Git: [strategy] (protected: [branches], PR target: [target], draft PR: [yes/no])
+   🧪 Testing: [framework] (session: [strategy], report format: [format])
    📝 CLAUDE.md: updated
 
    Next: Review your docs, then open a terminal and run: teamwerk
