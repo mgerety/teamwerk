@@ -44,6 +44,11 @@
 #     methodology_doc: "docs/testing-methodology.md"
 #     rules: ["R1", "R2", "R3", "R4", "R5", "R6"]
 #
+#   validation:
+#     command: "cd fxmobile && ./scripts/validate-test-quality.sh"
+#     description: "R1: no mocking internal modules (services/, hooks/, utils/, components/)"
+#     blocking: true
+#
 #   dod_gates:
 #     - name: "Unit Tests"
 #       owner: "builder"

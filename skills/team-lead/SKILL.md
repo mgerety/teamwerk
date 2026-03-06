@@ -333,14 +333,28 @@ When `teamwerk-config.yml` has a `testing:` section with expanded fields:
 
 4. **`testing.unit` / `testing.e2e`** — Framework-specific config that test engineers and builders need.
 
+### Deterministic Validation (CRITICAL)
+
+If `testing.validation.command` is set, this is a **deterministic quality check** that MUST run before any testing gate is marked as passed. This is not advisory — if the command exits non-zero, the gate fails. Period.
+
+1. Run `testing.validation.command` before marking ANY testing gate as passed.
+2. If it exits non-zero, REJECT the work. The command output tells you exactly what is wrong.
+3. Route the rejection back to the responsible role with the validation output.
+4. Do NOT override, skip, or rationalize away a validation failure.
+5. Include `testing.validation.command` in EVERY builder's task assignment so they can self-check before submitting.
+
+This check exists because LLMs will write tests that mock internal modules to make tests pass. The validator catches this deterministically. A human wrote the validator specifically because agent instructions alone were insufficient.
+
 ### Enforcing Gates
 
 **In Phase 1 (Planning):**
 - If `testing.dod_gates` includes a gate owned by `builder`, include unit test writing in builder task assignments. Tell builders: "This project requires unit tests as part of DoD. Read `testing.unit` in config for the framework and run command. Read `testing.quality_rules.methodology_doc` for quality rules."
+- If `testing.validation.command` is set, include it in EVERY builder's task assignment: "Before committing any test file, run `[testing.validation.command]`. If it fails, fix the violations before committing."
 - If `testing.dod_gates` includes a gate owned by `ui-test-engineer`, ensure the UI Test Engineer is in the team roster.
 
 **In Phase 4 (Testing):**
-- Before unblocking Phase 5, verify EACH required gate:
+- If `testing.validation.command` is set, run it FIRST before checking any other gate. If it fails, stop — nothing else matters until violations are fixed.
+- Then verify EACH required gate:
   - For `builder`-owned gates: confirm builders ran `testing.unit.run_command` and tests pass.
   - For `ui-test-engineer`-owned gates: confirm E2E tests pass via `testing.e2e.run_command`.
   - For `test-reviewer`-owned gates: confirm the Test Reviewer approved using the project's quality rules.

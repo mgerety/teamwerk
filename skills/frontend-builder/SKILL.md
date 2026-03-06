@@ -22,7 +22,8 @@ After reading `teamwerk-config.yml`, check `testing.dod_gates` for any gate wher
 2. **Read `testing.unit`** for the framework (`jest`, `vitest`, `pytest`, etc.) and `run_command`.
 3. **Read `testing.quality_rules.methodology_doc`** (if set) for the quality rules your tests must follow.
 4. **Run `testing.unit.run_command`** after writing tests to verify they pass.
-5. **Signal to the Team Lead** that the builder-owned testing gate is complete when all unit tests pass.
+5. **If `testing.validation.command` is set, run it before committing ANY test file.** If it exits non-zero, your tests have quality violations and MUST be fixed. Do NOT commit, do NOT rationalize, do NOT skip. Fix the violations or escalate to the Team Lead. A missing test is better than a fake test that mocks internal modules.
+6. **Signal to the Team Lead** that the builder-owned testing gate is complete when all unit tests pass AND the validation command passes.
 
 If no builder-owned gate exists in `testing.dod_gates`, you do NOT need to write tests — the test engineers handle it.
 

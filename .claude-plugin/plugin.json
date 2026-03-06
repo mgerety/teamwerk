@@ -1,6 +1,6 @@
 {
   "name": "teamwerk",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "AI agent team orchestration with per-AC status tracking, iterative work item lifecycle, smart launch menu, project context propagation, test design, adversarial review, and multi-framework evidence reporting. Spawns coordinated agent teams, enforces Rule Zero, manages git workflows, and generates HTML evidence reports with AC traceability. DONE/ACTIVE/OPEN status markers filter completed work from future sessions.",
   "author": {
     "name": "Michael Gerety"

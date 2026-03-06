@@ -203,6 +203,14 @@ testing:
   #     required: true
   #     check: "screenshots match approved designs"
 
+  # Test quality validation — deterministic pre-commit/pre-gate check
+  # validation:
+  #   command: ""                               # Script that exits 0 if tests are valid, non-zero if violations found
+  #                                             # e.g., "cd fxmobile && ./scripts/validate-test-quality.sh"
+  #   description: ""                           # What the validator checks (shown in rejection messages)
+  #                                             # e.g., "R1: no mocking internal modules"
+  #   blocking: true                            # If true, violations block commits and gate completion
+
   # Evidence report requirements
   # evidence:
   #   required: true                            # Must generate evidence report before done
