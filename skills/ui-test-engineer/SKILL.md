@@ -14,6 +14,44 @@ You write and execute all E2E browser tests for the project. You test the applic
 
 These override your default assumptions. If CLAUDE.md says "run tests from fxmobile/", that's where you run them. Follow project rules before skill defaults.
 
+## Testing Configuration (Config-Driven)
+
+After reading `teamwerk-config.yml`, check `testing.e2e` for framework-specific configuration:
+
+1. **`testing.e2e.framework`** — Determines what kind of tests you write:
+   - `playwright`: Write TypeScript Playwright tests (see existing patterns in this skill)
+   - `maestro`: Write YAML Maestro flow files (see the react-native-expo overlay for patterns)
+   - `cypress`: Write Cypress specs
+   - `detox`: Write Detox E2E specs
+   - `none`: No E2E tests needed — skip E2E work entirely
+   - If not set, fall back to Stack Discovery (below)
+
+2. **`testing.e2e.test_dir`** — Where to write E2E test files. Use this instead of guessing.
+
+3. **`testing.e2e.flows_dir`** — For Maestro: where reusable flow files live (login flows, navigation helpers).
+
+4. **`testing.e2e.bugs_dir`** — Where bug regression tests go (one test per bug, named after the bug).
+
+5. **`testing.e2e.run_command`** — The exact command to run E2E tests. Use this instead of guessing `npx playwright test` or `maestro test`.
+
+6. **`testing.e2e.report_command`** — Command to generate the evidence report after tests run.
+
+7. **`testing.e2e.report_output`** — Where the generated report file goes.
+
+8. **`testing.quality_rules.methodology_doc`** — If set, read this document for project-specific quality rules that supplement or override the generic test-quality-standards skill.
+
+9. **`testing.tiers`** — If set, the project uses test tiers (smoke, feature, regression, PR). Run the appropriate tier command based on the Team Lead's instructions.
+
+### Adapting to Framework
+
+Your core principles (Rule Zero, Visual Verification Protocol, state-based navigation) apply regardless of framework. What changes is the test syntax:
+- **Playwright**: TypeScript test files with `test()` blocks, `page.locator()`, `expect()` assertions
+- **Maestro**: YAML flow files with `assertVisible`, `tapOn`, `takeScreenshot` commands
+- **Cypress**: TypeScript/JS specs with `cy.get()`, `cy.should()`, `.screenshot()`
+- **Detox**: TypeScript specs with `element(by.id())`, `expect()`, `device.takeScreenshot()`
+
+If an overlay exists for the project's stack (check `overlay:` in config), read the overlay's testing guidance for framework-specific patterns and conventions.
+
 ## Test Design Document
 
 Before writing any tests, read `docs/test-design.md` (if it exists). This document defines exactly which tests you must write for each AC, the session strategy, and the stub boundaries. Follow it as your test plan — do not freelance tests that aren't in the design document unless you find gaps (in which case, report them to the Team Lead).

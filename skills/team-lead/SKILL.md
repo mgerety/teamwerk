@@ -313,6 +313,49 @@ Every task you create must trace to a selected AC. No feature creep, no "nice to
 
 Read the project's test quality standards document (or the test-quality-standards skill if the project does not have one) for test quality requirements the Test Reviewer must enforce.
 
+## Testing Configuration (Config-Driven)
+
+After reading `teamwerk-config.yml`, check for the `testing:` section. If it contains `dod_gates`, `quality_rules`, or `evidence` subsections, testing is a first-class workflow gate for this project.
+
+### Reading Testing Config
+
+When `teamwerk-config.yml` has a `testing:` section with expanded fields:
+
+1. **`testing.dod_gates`** — A list of gates that MUST pass before declaring work complete. Each gate has:
+   - `name`: Human-readable gate name
+   - `owner`: Which role is responsible (`builder`, `ui-test-engineer`, `api-test-engineer`, `test-reviewer`)
+   - `required`: Whether this gate blocks completion
+   - `check`: What the gate verifies
+
+2. **`testing.quality_rules`** — Points to a project-specific methodology doc and rule IDs. Pass this to the Test Reviewer instead of (or in addition to) the generic test-quality-standards skill.
+
+3. **`testing.evidence`** — Whether an evidence report is required and what it must include.
+
+4. **`testing.unit` / `testing.e2e`** — Framework-specific config that test engineers and builders need.
+
+### Enforcing Gates
+
+**In Phase 1 (Planning):**
+- If `testing.dod_gates` includes a gate owned by `builder`, include unit test writing in builder task assignments. Tell builders: "This project requires unit tests as part of DoD. Read `testing.unit` in config for the framework and run command. Read `testing.quality_rules.methodology_doc` for quality rules."
+- If `testing.dod_gates` includes a gate owned by `ui-test-engineer`, ensure the UI Test Engineer is in the team roster.
+
+**In Phase 4 (Testing):**
+- Before unblocking Phase 5, verify EACH required gate:
+  - For `builder`-owned gates: confirm builders ran `testing.unit.run_command` and tests pass.
+  - For `ui-test-engineer`-owned gates: confirm E2E tests pass via `testing.e2e.run_command`.
+  - For `test-reviewer`-owned gates: confirm the Test Reviewer approved using the project's quality rules.
+- If any required gate fails, do NOT proceed. Route the failure back to the responsible role.
+
+**In Phase 5 (Evidence Report):**
+- If `testing.evidence.required` is `true`, the evidence report MUST be generated before declaring complete.
+- If `testing.e2e.report_command` is set, use that command to generate the report.
+- Verify the report exists at `testing.e2e.report_output` (or `testing.unit.report_output` for unit reports).
+- Check that `testing.evidence.must_include` items are present in the report.
+
+### When No Testing Config Exists
+
+If `teamwerk-config.yml` has no `testing.dod_gates`, `testing.quality_rules`, or `testing.evidence` — behave exactly as before. No gates, no extra requirements. The generic test-quality-standards skill is still the default.
+
 ## Context Discipline (Team Lead)
 
 You are the most context-vulnerable agent. You coordinate 6+ teammates, and every coordination message fills your context window. If your context dies, the entire team loses its coordinator.

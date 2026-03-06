@@ -7,6 +7,20 @@ description: "Use when writing, reviewing, or evaluating test quality — enforc
 
 These standards define what constitutes an acceptable test. Any agent reviewing tests MUST enforce these standards and reject tests that violate them.
 
+## Project-Specific Rules
+
+This skill provides **generic** test quality standards that apply to all projects. However, projects can define their own quality rules in a methodology document referenced by `testing.quality_rules.methodology_doc` in `teamwerk-config.yml`.
+
+**When a project has its own quality rules:**
+- The project's rules are the PRIMARY reference for the Test Reviewer
+- This skill's Rule Zero and garbage test categories STILL apply (they are universal)
+- The project's rule IDs (e.g., R1-R6) take precedence over this skill's numbered categories
+- The Test Reviewer references project rule IDs in rejection messages
+
+**When a project has NO quality rules configured:**
+- This skill is the sole reference for test quality
+- All categories below apply in full
+
 ---
 
 ## Rule Zero: Tests Must NEVER Modify the Application Under Test

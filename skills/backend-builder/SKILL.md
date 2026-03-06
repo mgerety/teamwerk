@@ -14,6 +14,18 @@ You build the API and server-side logic for the project.
 
 These override your default assumptions. If CLAUDE.md says "use NativeWind", you use NativeWind. If it says "all source in fxmobile/", that's where you work. Follow project rules before skill defaults.
 
+## Testing Responsibilities (Config-Driven)
+
+After reading `teamwerk-config.yml`, check `testing.dod_gates` for any gate where `owner` is `"builder"`. If such a gate exists:
+
+1. **You must write unit tests alongside your implementation code.** This is part of your definition of done — not a separate phase.
+2. **Read `testing.unit`** for the framework (`jest`, `vitest`, `pytest`, etc.) and `run_command`.
+3. **Read `testing.quality_rules.methodology_doc`** (if set) for the quality rules your tests must follow.
+4. **Run `testing.unit.run_command`** after writing tests to verify they pass.
+5. **Signal to the Team Lead** that the builder-owned testing gate is complete when all unit tests pass.
+
+If no builder-owned gate exists in `testing.dod_gates`, you do NOT need to write tests — the test engineers handle it.
+
 ## Stack Discovery
 
 Before writing any code, read the project's source files to identify the backend framework in use (Express, ASP.NET Core, Django, FastAPI, Spring Boot, Gin, Rails, Phoenix, or equivalent). Look for:

@@ -6,13 +6,13 @@
 
 ## Test Stack
 
-React Native + Expo projects in this team can use:
-- **Detox** for E2E device/emulator testing (most capable)
-- **Maestro** for E2E testing with YAML-based flows (simpler setup)
-- **React Native Testing Library** for component tests
-- **Jest** for unit tests (included with Expo by default)
+React Native + Expo projects should prefer this stack order:
+1. **Maestro** for E2E testing — YAML-based flows, simpler setup, less room for garbage tests, per-scenario file pattern
+2. **Jest** for unit tests (included with Expo by default)
+3. **React Native Testing Library** for component tests
+4. **Detox** as an alternative for E2E when Maestro cannot cover the scenario (complex gestures, native module testing)
 
-Choose based on what the project already has configured. If nothing is configured, Maestro is the easiest to set up, Jest + RNTL is the fastest to run.
+If the project's `teamwerk-config.yml` specifies `testing.e2e.framework`, use that. Otherwise, prefer Maestro for new E2E test setups.
 
 ---
 
@@ -272,6 +272,42 @@ maestro test tests/e2e/flows/
 # Record a test interactively
 maestro record
 ```
+
+---
+
+### Maestro Best Practices (Required)
+
+**Per-scenario file pattern.** Each test scenario is its own YAML file with comment headers:
+```yaml
+# Test: Screen Renders
+# AC: AC-1
+# Purpose: Verify the login screen displays all expected elements
+# Expected: Username field, password field, and Continue button visible
+# Preconditions: App launched, not logged in
+appId: com.myapp
+---
+- launchApp
+- assertVisible:
+    id: "username-input"
+- assertVisible:
+    id: "password-input"
+- assertVisible:
+    text: "CONTINUE"
+- takeScreenshot: evidence/ac1-login-screen-renders
+```
+
+**Conditional flow pattern.** Tests must handle whatever state the device is in:
+```yaml
+- runFlow:
+    when:
+      visible: "CONTINUE"
+    commands:
+      - tapOn: "CONTINUE"
+```
+
+**`clearState` is FORBIDDEN.** Tests must NEVER wipe app data. If a test needs a clean state, it must navigate to that state through the UI or use a reusable flow. The `clearState` flag destroys real user scenarios and hides bugs.
+
+**Evidence report generation is mandatory.** After E2E tests run, generate the evidence report using the command from `testing.e2e.report_command` in the project config. If no command is configured, tell the Team Lead that evidence report generation is not set up.
 
 ---
 

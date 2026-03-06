@@ -148,3 +148,63 @@ testing:
 
   # Where screenshots/evidence are stored
   evidence-dir: "tests/evidence/"
+
+  # --- EXPANDED TESTING CONFIG (uncomment and customize per project) ---
+
+  # Unit test configuration
+  # unit:
+  #   framework: jest                           # jest | vitest | mocha | pytest | dotnet-test | etc.
+  #   run_command: "npm test"                   # Command to run unit tests
+  #   report_command: ""                        # Command to generate unit test report (optional)
+  #   report_output: ""                         # Path to generated report file (optional)
+
+  # E2E test configuration
+  # e2e:
+  #   framework: playwright                     # playwright | maestro | cypress | detox | none
+  #   test_dir: "tests/e2e"                     # Where E2E test files live
+  #   flows_dir: ""                             # Maestro flows directory (maestro only)
+  #   bugs_dir: ""                              # Bug regression tests directory (optional)
+  #   run_command: "npx playwright test"        # Command to run E2E tests
+  #   report_command: ""                        # Command to generate E2E report (optional)
+  #   report_output: ""                         # Path to generated report file (optional)
+
+  # Test tiers (optional — for projects with smoke/feature/regression/PR tiers)
+  # tiers:
+  #   config: ""                                # Path to tier config JSON (optional)
+  #   commands:
+  #     smoke: ""                               # Command for smoke tests
+  #     feature: ""                             # Command for feature tests
+  #     regression: ""                          # Command for regression tests
+  #     pr: ""                                  # Command for PR-level tests
+
+  # Device profiles (mobile projects only)
+  # devices:
+  #   config: ""                                # Path to devices config JSON
+  #   dev_profile: "phone-portrait"             # Device profile for dev testing
+  #   pr_profiles: "all"                        # Device profiles for PR testing
+
+  # Quality rules — project-specific test quality methodology
+  # quality_rules:
+  #   methodology_doc: ""                       # Path to project's testing methodology doc
+  #   rules: []                                 # Rule IDs to enforce (e.g., ["R1", "R2", "R3"])
+
+  # Definition of Done gates — testing gates the team lead enforces
+  # dod_gates:
+  #   - name: "Unit Tests"
+  #     owner: "builder"                        # Which role is responsible
+  #     required: true
+  #     check: "unit tests pass"
+  #   - name: "E2E Tests"
+  #     owner: "ui-test-engineer"
+  #     required: true
+  #     check: "e2e tests pass with evidence report"
+  #   - name: "Visual Verification"
+  #     owner: "test-reviewer"
+  #     required: true
+  #     check: "screenshots match approved designs"
+
+  # Evidence report requirements
+  # evidence:
+  #   required: true                            # Must generate evidence report before done
+  #   format: "html"                            # html | pdf
+  #   must_include: ["screenshots", "pass_fail", "test_metadata"]

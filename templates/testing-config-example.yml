@@ -1,0 +1,132 @@
+# Teamwerk Testing Configuration Examples
+# Copy the relevant section into your project's teamwerk-config.yml under the `testing:` key.
+# All fields are optional — only configure what your project uses.
+
+# ============================================================
+# Example 1: Mobile (React Native + Maestro + Jest)
+# ============================================================
+# testing:
+#   framework: maestro
+#   result-format: junit-xml
+#   session-strategy: shared-session
+#   results-path: "fxmobile/test-reports/"
+#   evidence-dir: "fxmobile/test-reports/screenshots/"
+#
+#   unit:
+#     framework: jest
+#     run_command: "cd fxmobile && npx jest"
+#     report_command: "cd fxmobile && npx jest --reporters=default --reporters=jest-html-reporters"
+#     report_output: "fxmobile/test-reports/unit-report.html"
+#
+#   e2e:
+#     framework: maestro
+#     test_dir: "fxmobile/__tests__/e2e/screens"
+#     flows_dir: "fxmobile/__tests__/e2e/flows"
+#     bugs_dir: "fxmobile/__tests__/e2e/bugs"
+#     run_command: "cd fxmobile && npm run test:smoke"
+#     report_command: "cd fxmobile && node scripts/generate-e2e-report.js"
+#     report_output: "fxmobile/test-reports/e2e-report.html"
+#
+#   tiers:
+#     config: "fxmobile/__tests__/config/test-tiers.json"
+#     commands:
+#       smoke: "cd fxmobile && npm run test:smoke"
+#       feature: "cd fxmobile && npm run test:feature"
+#       regression: "cd fxmobile && npm run test:regression"
+#       pr: "cd fxmobile && npm run test:pr"
+#
+#   devices:
+#     config: "fxmobile/__tests__/config/devices.json"
+#     dev_profile: "phone-portrait"
+#     pr_profiles: "all"
+#
+#   quality_rules:
+#     methodology_doc: "docs/testing-methodology.md"
+#     rules: ["R1", "R2", "R3", "R4", "R5", "R6"]
+#
+#   dod_gates:
+#     - name: "Unit Tests"
+#       owner: "builder"
+#       required: true
+#       check: "unit tests pass"
+#     - name: "E2E Tests"
+#       owner: "ui-test-engineer"
+#       required: true
+#       check: "e2e tests pass with evidence report"
+#     - name: "Visual Verification"
+#       owner: "test-reviewer"
+#       required: true
+#       check: "screenshots match approved designs"
+#
+#   evidence:
+#     required: true
+#     format: "html"
+#     must_include: ["screenshots", "pass_fail", "test_metadata"]
+
+# ============================================================
+# Example 2: Web (React + Playwright + Vitest)
+# ============================================================
+# testing:
+#   framework: playwright
+#   result-format: playwright-json
+#   session-strategy: shared-session
+#   results-path: "test-results.json"
+#   evidence-dir: "tests/evidence/"
+#
+#   unit:
+#     framework: vitest
+#     run_command: "npm test"
+#
+#   e2e:
+#     framework: playwright
+#     test_dir: "tests/e2e"
+#     run_command: "npx playwright test"
+#     report_command: "npx playwright show-report"
+#     report_output: "playwright-report/index.html"
+#
+#   quality_rules:
+#     methodology_doc: "docs/testing-methodology.md"
+#
+#   dod_gates:
+#     - name: "Unit Tests"
+#       owner: "builder"
+#       required: true
+#       check: "unit tests pass"
+#     - name: "E2E Tests"
+#       owner: "ui-test-engineer"
+#       required: true
+#       check: "e2e tests pass"
+#
+#   evidence:
+#     required: true
+#     format: "html"
+#     must_include: ["screenshots", "pass_fail"]
+
+# ============================================================
+# Example 3: API-Only (Express + Jest)
+# ============================================================
+# testing:
+#   framework: jest
+#   result-format: auto
+#   session-strategy: none
+#   results-path: "test-results.json"
+#
+#   unit:
+#     framework: jest
+#     run_command: "npm test"
+#
+#   e2e:
+#     framework: none
+#
+#   dod_gates:
+#     - name: "Unit Tests"
+#       owner: "builder"
+#       required: true
+#       check: "unit tests pass"
+#     - name: "API Tests"
+#       owner: "api-test-engineer"
+#       required: true
+#       check: "api integration tests pass"
+#
+#   evidence:
+#     required: false
