@@ -8,7 +8,7 @@
     {
       "name": "teamwerk",
       "description": "AI agent team orchestration with iterative work items, smart launch, test design, and adversarial review",
-      "version": "1.2.0",
+      "version": "1.3.0",
       "source": "./",
       "author": {
         "name": "Michael Gerety"
