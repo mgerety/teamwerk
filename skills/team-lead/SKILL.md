@@ -151,7 +151,8 @@ If any step fails, degrade gracefully: report the branch name and target so the 
 - **Frontend Builder** -- builds the UI (components, styling, user interactions, API integration)
 - **Test Designer** -- designs test strategy per AC, defines stub boundaries and session strategy. Produces `docs/test-design.md`. Spawned AFTER implementation, BEFORE test engineers.
 - **API Test Engineer** -- writes and runs API/integration tests (request/response contracts, auth, adversarial inputs)
-- **UI Test Engineer** -- writes and runs E2E browser tests (visual verification, screenshots, user flows)
+- **Mobile Test Engineer** -- writes and runs mobile E2E tests with Maestro (YAML flows, device testing, screenshots). Use for maestro/detox projects.
+- **Web Test Engineer** -- writes and runs browser E2E tests with Playwright (browser contexts, selectors, screenshots). Use for playwright/cypress projects.
 - **Test Reviewer** -- reviews test quality, rejects tests that do not meet standards
 - **Adversarial Reviewer** -- reviews implementation against spec with fresh context, produces structured PASS/FAIL findings in `docs/adversarial-review.md`. Spawned AFTER tests pass review, BEFORE evidence report.
 
@@ -235,24 +236,47 @@ Think of it this way: the role (Backend Builder, Frontend Builder) is a skill se
 5. If the Test Designer found critical stubs (required features that are stubbed), route fixes to the appropriate Builder BEFORE unblocking test engineers
 6. Unblock test engineers with the test design document ready
 
+### Phase 3.75: Lint Verification (Phase Gate)
+
+When any builder signals "implementation complete":
+1. Check if the project has a lint command configured (in `CLAUDE.md`, `package.json` scripts, or `teamwerk-config.yml`)
+2. Run the lint command (e.g., `npx eslint . --max-warnings=0`)
+3. If it fails, REJECT the work immediately — send the lint output back to the builder
+4. Do NOT proceed to testing phases with lint-dirty code
+5. This check is non-negotiable — CI will fail the PR regardless
+
 ### Phase 4: Testing (parallel)
 1. API Test Engineer reads `docs/test-design.md` and writes API/integration tests per the design
-2. UI Test Engineer reads `docs/test-design.md` and writes E2E browser tests per the design
-3. Both test engineers can work in parallel — API tests don't depend on UI tests
+2. Mobile Test Engineer or Web Test Engineer reads `docs/test-design.md` and writes E2E tests per the design (use the appropriate skill based on `testing.e2e.framework` in config)
+3. Both test engineers can work in parallel — API tests don't depend on E2E tests
 4. Both submit tests to the Test Reviewer
 5. Test Reviewer approves or rejects each test (also checks compliance with test design document)
 6. Rejected tests go back to the responsible test engineer for revision
 7. Cycle repeats until all tests pass review
 
+### Phase 4.25: Visual Verification Gate
+
+E2E test results are only accepted if visual verification was performed:
+1. Check that the test engineer's report includes a "Visual Verification" section
+2. Every screenshot must have a structured analysis against the test's Expected field
+3. If visual verification was not performed, REJECT the E2E results
+4. If any visual verification finding is FAIL, the test is FAIL regardless of what the test runner reported
+5. Text assertions verify CONTENT. Screenshot verification verifies APPEARANCE. Both must pass.
+
 ### Phase 4.5: Adversarial Review
 1. Spawn an **Adversarial Reviewer** teammate (use the adversarial-reviewer skill)
 2. Adversarial Reviewer reads ACs FIRST (spec-first), then implementation code, then tests
 3. Adversarial Reviewer produces `docs/adversarial-review.md` with structured PASS/FAIL/WARN per AC
-4. You read the findings:
+4. The adversarial review now includes TWO mandatory sections:
+   a. Implementation vs spec review (existing)
+   b. Unit test quality audit (NEW — see adversarial-reviewer skill)
+5. You read the findings:
    - If all PASS: proceed to evidence report
    - If any FAIL: route fixes to the appropriate teammate, wait for fix, then re-spawn the Adversarial Reviewer for re-review
+   - If unit test audit has FAIL findings: route FAIL test files back to the builder for REWRITE (not patch), then re-run adversarial reviewer
    - **You CANNOT override FAIL findings.** They must be fixed or explicitly waived by the human user in the PR review.
-5. Include ALL adversarial review findings (PASS, FAIL, WARN) in the evidence report
+6. Do NOT proceed to Phase 5 with unresolved FAIL findings from either section
+7. Include ALL adversarial review findings (PASS, FAIL, WARN) in the evidence report
 
 ### Phase 5: Evidence Report
 1. Generate the HTML evidence report (includes both API and E2E results, plus adversarial review findings)
@@ -365,6 +389,44 @@ This check exists because LLMs will write tests that mock internal modules to ma
 - If `testing.e2e.report_command` is set, use that command to generate the report.
 - Verify the report exists at `testing.e2e.report_output` (or `testing.unit.report_output` for unit reports).
 - Check that `testing.evidence.must_include` items are present in the report.
+
+## Evidence Verification (MANDATORY)
+
+When any test engineer (mobile or web) reports completion, you MUST verify their claims before accepting the report. Agents have been observed fabricating results — reporting "10/10 PASS with 28 screenshots" when zero files existed on disk.
+
+### Verification Steps
+
+1. **Verify files exist.** Run `ls -la` on the claimed evidence paths BEFORE accepting the report. If files don't exist, reject immediately — the agent fabricated results. Do NOT ask the agent to explain — the files either exist or they don't.
+
+2. **Check file timestamps.** Evidence files should have timestamps from the current session. If timestamps are from hours or days ago, the agent reused stale results or didn't actually run tests. Reject and require a fresh run.
+
+3. **Cross-reference screenshot count.** The test engineer's completion message must include:
+   - `ls -la [results_dir]` output showing actual files
+   - `ls [screenshots_dir] | wc -l` showing screenshot count
+   If these are missing from the completion message, reject — the agent skipped evidence verification.
+
+4. **Generate the report yourself.** Do not trust the test engineer to generate the report. Run:
+   ```bash
+   node "${CLAUDE_PLUGIN_ROOT}/scripts/report-generator.js" \
+     --mode ac \
+     --input <results-dir> \
+     --output <report-path>
+   ```
+
+5. **Verify report file size.** After generation, check the report size:
+   - A real report with embedded base64 screenshots will be **hundreds of KB to several MB**
+   - If the report is < 100KB, it has no screenshots — investigate
+   - Run `ls -la <report-path>` and check the file size
+
+6. **Spot-check test durations.** If every test shows the exact same duration (e.g., all 27.0s), the XML data is fabricated. Real test durations vary.
+
+### What to Do When Verification Fails
+
+- **Files don't exist:** "REJECTED: Evidence files not found at [path]. Run `ls -la [path]` yourself and share the output."
+- **Stale timestamps:** "REJECTED: Evidence timestamps are from [date], not this session. Rerun tests and produce fresh results."
+- **Missing verification in message:** "REJECTED: Your completion message must include `ls -la` output of the results directory. Resubmit with evidence."
+- **Report too small:** "REJECTED: Report is [size] — expected > 100KB with screenshots. Check screenshot embedding."
+- **Identical durations:** "REJECTED: All tests show [duration] — real tests have varying durations. Check XML generation."
 
 ### When No Testing Config Exists
 

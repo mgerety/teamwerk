@@ -9,22 +9,24 @@ Generate a self-contained HTML evidence report from test results.
 ## Steps
 
 1. **Check for test results.** Look for test output files in the project:
+   - JUnit XML output (e.g., `test-reports/e2e-results/*.xml`, `build/test-results/*.xml`)
    - Playwright JSON reporter output (e.g., `tests/report/test-results.json`, `test-results.json`)
-   - JUnit XML output (e.g., `test-results.xml`, `build/test-results/*.xml`)
    - .NET TRX output (e.g., `TestResults/*.trx`)
-   - Jest JSON output
 
    If `teamwerk-config.yml` has a `testing.results-path`, check there first.
 
-   The report generator reads AC definitions from the `work-items.active` path in `teamwerk-config.yml`. This can be a single file (e.g., `docs/acceptance-criteria.md`) or a directory of `.md` files. Legacy `acceptance-criteria.path` config is also supported.
+   The report generator reads AC definitions from YAML test file headers (`# AC:` tags) and/or from the `work-items.active` path in `teamwerk-config.yml`.
 
 2. **If no results found:** Tell the user to run their tests first with an appropriate reporter. Examples:
    ```bash
-   # Playwright
+   # Maestro (produces JUnit XML)
+   maestro test --format junit tests/e2e/flows/ --output test-reports/e2e-results/
+
+   # Playwright (produces JSON)
    npx playwright test --reporter=json > tests/report/test-results.json
 
-   # Maestro (produces JUnit XML by default)
-   maestro test --format junit tests/e2e/flows/ --output test-results.xml
+   # Playwright (produces JUnit XML)
+   npx playwright test --reporter=junit
 
    # .NET
    dotnet test --logger "trx;LogFileName=test-results.trx"
@@ -33,29 +35,59 @@ Generate a self-contained HTML evidence report from test results.
    pytest --junitxml=test-results.xml
    ```
 
-3. **Detect the result format.** Check `teamwerk-config.yml` for `testing.result-format`.
-   If not set or "auto", detect from file:
-   - `.json` files → check for Playwright JSON structure
-   - `.xml` files → check for `<testsuites>` (JUnit) or `<TestRun>` (TRX)
-   - `.trx` files → TRX format
-
-4. **Include adversarial review.** If `docs/adversarial-review.md` exists, include it:
+3. **Run the report generator:**
    ```bash
    node "${CLAUDE_PLUGIN_ROOT}/scripts/report-generator.js" \
-     --results <path-to-results> \
-     --format <detected-format> \
-     --reviewer docs/adversarial-review.md \
-     --output <project>/tests/report/evidence-report.html
+     --input <results-dir> \
+     --output <report.html> \
+     [--mode ac|regression] \
+     [--format auto|junit-xml|playwright-json|trx] \
+     [--tests <yaml-test-dir>] \
+     [--screenshots <screenshots-dir>] \
+     [--reviewer <adversarial-review.md>] \
+     [--config <teamwerk-config.yml>] \
+     [--logo <png-path>] \
+     [--company-name <name>] \
+     [--title <title>]
    ```
 
-   If no adversarial review exists, omit the `--reviewer` flag:
+   **Flags:**
+   - `--mode ac` (default) — Group tests by acceptance criteria. Only shows tests with `# AC:` tags. Ideal for PR review.
+   - `--mode regression` — Group tests by screen. Shows ALL tests. Ideal for regression suite runs.
+   - `--format auto` (default) — Auto-detect from file content. Or specify: `junit-xml`, `playwright-json`, `trx`
+   - `--reviewer` — Path to adversarial review markdown. Auto-detects `docs/adversarial-review.md` if present.
+   - `--config` — Path to `teamwerk-config.yml` for AC definition loading.
+   - `--screenshots` — Explicit screenshot directory. Auto-searches `input/screenshots/`, `test-reports/screenshots/`, and input dir.
+   - `--logo` — Path to PNG logo file for report branding.
+   - `--company-name` — Company name displayed in report header.
+   - `--title` — Custom report title.
+
+4. **Examples:**
    ```bash
+   # AC mode with adversarial review (most common for PR review)
    node "${CLAUDE_PLUGIN_ROOT}/scripts/report-generator.js" \
-     --results <path-to-results> \
-     --format <detected-format> \
-     --output <project>/tests/report/evidence-report.html
+     --mode ac \
+     --input test-reports/e2e-results \
+     --reviewer docs/adversarial-review.md
+
+   # Regression mode for full suite
+   node "${CLAUDE_PLUGIN_ROOT}/scripts/report-generator.js" \
+     --mode regression \
+     --input test-reports/e2e-results
+
+   # Branded report with company logo
+   node "${CLAUDE_PLUGIN_ROOT}/scripts/report-generator.js" \
+     --mode ac \
+     --logo assets/logo.png \
+     --company-name "Acme Corp" \
+     --title "Sprint 5 E2E Evidence"
+
+   # Playwright JSON results
+   node "${CLAUDE_PLUGIN_ROOT}/scripts/report-generator.js" \
+     --format playwright-json \
+     --input tests/report/test-results.json
    ```
 
-5. **Report the output location.** Tell the user where the HTML file was generated (e.g., `tests/report/evidence-report.html`).
+5. **Report the output location.** Tell the user where the HTML file was generated.
 
-6. **Mention how to review.** The report is a self-contained HTML file that can be opened directly in a browser for review. No server required.
+6. **Mention how to review.** The report is a self-contained HTML file that can be opened directly in a browser. No server required. All screenshots are base64-embedded.

@@ -1,798 +1,121 @@
 #!/usr/bin/env node
+
 /**
- * Test Evidence Report Generator
+ * Teamwerk E2E Evidence Report Generator v3
  *
- * Reads test results in multiple formats (Playwright JSON, JUnit XML, TRX)
- * plus screenshots, and builds a grouped HTML evidence report.
- * Automatically detects AC definitions from config, markdown, or test names.
- * Optionally includes adversarial review findings.
+ * Multi-format test result parser and evidence report generator.
+ * Supports: JUnit XML (Maestro, pytest, Java), Playwright JSON, TRX (.NET)
+ *
+ * Produces a single self-contained HTML evidence report from:
+ *   1. Test result files (JUnit XML, Playwright JSON, or TRX)
+ *   2. Screenshot PNG files (evidence images)
+ *   3. Maestro commands JSON (step-level execution detail)
+ *   4. YAML test files (comment headers: Test, AC, Purpose, Expected, Preconditions)
+ *   5. Adversarial review findings (optional)
+ *
+ * Report includes:
+ *   - Clickable AC traceability matrix
+ *   - Screen-grouped or AC-grouped test sections
+ *   - Per-test metadata (purpose, expected, preconditions)
+ *   - Execution steps with inline screenshots
+ *   - Lightbox for full-size screenshot viewing
+ *   - Adversarial review findings (if provided)
+ *
+ * Modes:
+ *   --mode ac          Group by acceptance criteria (development/PR review)
+ *   --mode regression  Group by screen (full regression suite)
  *
  * Usage:
- *   node report-generator.js
- *   node report-generator.js --results path/to/test-results.json
- *   node report-generator.js --format playwright-json|junit-xml|trx|auto
- *   node report-generator.js --reviewer path/to/adversarial-review.md
- *   node report-generator.js --template path/to/template.html
- *   node report-generator.js --output path/to/evidence-report.html
- *   node report-generator.js --config path/to/teamwerk-config.yml
+ *   node report-generator.js \
+ *     --input <results-dir> \
+ *     --output <report.html> \
+ *     [--mode ac|regression] \
+ *     [--format auto|junit-xml|playwright-json|trx] \
+ *     [--tests <yaml-dir>] \
+ *     [--screenshots <screenshots-dir>] \
+ *     [--reviewer <adversarial-review.md>] \
+ *     [--config <teamwerk-config.yml>] \
+ *     [--logo <png-path>] \
+ *     [--company-name <name>] \
+ *     [--title <title>]
+ *
+ * Defaults:
+ *   --input        test-reports/e2e-results
+ *   --output       test-reports/e2e-report.html
+ *   --mode         ac
+ *   --format       auto (detect from file content)
+ *   --tests        __tests__/e2e/screens
+ *   --screenshots  (auto: input/screenshots, then test-reports/screenshots)
  */
 
-const fs = require('fs');
-const path = require('path');
+const fs = require("fs");
+const path = require("path");
 
-// --- CLI argument parsing ---
-const args = process.argv.slice(2);
-function getArg(flag) {
-  const idx = args.indexOf(flag);
-  if (idx === -1 || idx + 1 >= args.length) return null;
-  return args[idx + 1];
-}
+// ---------------------------------------------------------------------------
+// CLI args
+// ---------------------------------------------------------------------------
 
-const PLUGIN_ROOT = path.resolve(__dirname, '..');
-const PROJECT_ROOT = process.cwd();
-
-const cliResults = getArg('--results');
-const cliTemplate = getArg('--template');
-const cliOutput = getArg('--output');
-const cliConfig = getArg('--config');
-const cliFormat = getArg('--format') || 'auto';
-const cliReviewer = getArg('--reviewer');
-
-// --- Auto-detect paths ---
-
-function findResultsFile() {
-  if (cliResults) {
-    const resolved = path.isAbsolute(cliResults) ? cliResults : path.join(PROJECT_ROOT, cliResults);
-    if (fs.existsSync(resolved)) return resolved;
-    console.error(`Error: Results file not found: ${resolved}`);
-    process.exit(1);
-  }
-  // Common Playwright JSON reporter output paths
-  const candidates = [
-    path.join(PROJECT_ROOT, 'tests', 'report', 'test-results.json'),
-    path.join(PROJECT_ROOT, 'test-results', 'results.json'),
-    path.join(PROJECT_ROOT, 'test-results.json'),
-    path.join(PROJECT_ROOT, 'playwright-report', 'test-results.json'),
-    path.join(PROJECT_ROOT, 'reports', 'test-results.json'),
-  ];
-  for (const c of candidates) {
-    if (fs.existsSync(c)) return c;
-  }
-  console.error('Error: No test results JSON found. Use --results <path> to specify.');
-  console.error('Searched:', candidates.map(c => path.relative(PROJECT_ROOT, c)).join(', '));
-  process.exit(1);
-}
-
-function findTemplatePath() {
-  if (cliTemplate) {
-    const resolved = path.isAbsolute(cliTemplate) ? cliTemplate : path.join(PROJECT_ROOT, cliTemplate);
-    if (fs.existsSync(resolved)) return resolved;
-    console.error(`Error: Template file not found: ${resolved}`);
-    process.exit(1);
-  }
-  // Default: bundled template in the plugin's scripts directory
-  const bundled = path.join(__dirname, 'report-template.html');
-  if (fs.existsSync(bundled)) return bundled;
-  console.error('Error: No report template found. Use --template <path> to specify.');
-  process.exit(1);
-}
-
-function findOutputPath() {
-  if (cliOutput) {
-    return path.isAbsolute(cliOutput) ? cliOutput : path.join(PROJECT_ROOT, cliOutput);
-  }
-  return path.join(PROJECT_ROOT, 'tests', 'report', 'evidence-report.html');
-}
-
-function findEvidenceDir() {
-  const candidates = [
-    path.join(PROJECT_ROOT, 'tests', 'evidence'),
-    path.join(PROJECT_ROOT, 'test-evidence'),
-    path.join(PROJECT_ROOT, 'evidence'),
-    path.join(PROJECT_ROOT, 'tests', 'screenshots'),
-  ];
-  for (const c of candidates) {
-    if (fs.existsSync(c) && fs.statSync(c).isDirectory()) return c;
-  }
-  return null;
-}
-
-// --- AC Definition Loading ---
-
-function parseSimpleYaml(content) {
-  // Minimal YAML parser for teamwerk-config.yml
-  // Supports: key: value, nested objects (2-space indent), arrays (- item)
-  const result = {};
-  const lines = content.split('\n');
-  let currentSection = null;
-  let currentSubKey = null;
-
-  for (const rawLine of lines) {
-    const line = rawLine.replace(/\r$/, '');
-    if (/^\s*#/.test(line) || /^\s*$/.test(line)) continue;
-
-    const topMatch = line.match(/^(\w[\w-]*):\s*(.*)/);
-    const nestedMatch = line.match(/^  (\w[\w-]*):\s*(.*)/);
-    const arrayMatch = line.match(/^  - (.*)/);
-
-    if (topMatch && !line.startsWith(' ')) {
-      currentSection = topMatch[1];
-      const val = topMatch[2].trim();
-      if (val) {
-        result[currentSection] = val;
-      } else {
-        result[currentSection] = {};
-      }
-      currentSubKey = null;
-    } else if (nestedMatch && currentSection && typeof result[currentSection] === 'object' && !Array.isArray(result[currentSection])) {
-      currentSubKey = nestedMatch[1];
-      const val = nestedMatch[2].trim();
-      if (val) {
-        result[currentSection][currentSubKey] = val;
-      }
-    } else if (arrayMatch && currentSection) {
-      if (!Array.isArray(result[currentSection])) {
-        result[currentSection] = [];
-      }
-      result[currentSection].push(arrayMatch[1].trim());
-    }
-  }
-  return result;
-}
-
-function loadACFromConfig(configPath) {
-  if (!fs.existsSync(configPath)) return null;
-  try {
-    const content = fs.readFileSync(configPath, 'utf8');
-    const config = parseSimpleYaml(content);
-    const defs = {};
-    const mins = {};
-
-    if (config['acceptance-criteria'] && typeof config['acceptance-criteria'] === 'object') {
-      for (const [key, val] of Object.entries(config['acceptance-criteria'])) {
-        defs[key] = val;
-        mins[key] = 1; // Default minimum
-      }
-    }
-
-    if (config['minimum-tests'] && typeof config['minimum-tests'] === 'object') {
-      for (const [key, val] of Object.entries(config['minimum-tests'])) {
-        mins[key] = parseInt(val, 10) || 1;
-      }
-    }
-
-    const projectName = config['project-name'] || config['name'] || null;
-
-    if (Object.keys(defs).length > 0) {
-      return { definitions: defs, minimums: mins, projectName };
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
-
-function loadACFromMarkdown(mdPath) {
-  if (!fs.existsSync(mdPath)) return null;
-  try {
-    const content = fs.readFileSync(mdPath, 'utf8');
-    const defs = {};
-    const mins = {};
-    const statuses = {};
-
-    // Match lines like "## AC-1.1: Task Creation with Validation" or "- AC-1: ..."
-    const acPattern = /(?:^#+\s*|^[-*]\s*|^)(AC-[\d.]+)[:\s]+(.+)/gm;
-    let match;
-    while ((match = acPattern.exec(content)) !== null) {
-      const acId = match[1];
-      let desc = match[2].trim().replace(/\*+/g, '');
-
-      // Extract inline status: "— DONE", "-- DONE", "— ACTIVE", etc.
-      const inlineStatusMatch = desc.match(/\s*[—–-]{1,2}\s*(DONE|ACTIVE|OPEN)\s*$/i);
-      if (inlineStatusMatch) {
-        statuses[acId] = inlineStatusMatch[1].toUpperCase();
-        desc = desc.slice(0, inlineStatusMatch.index).trim();
-      }
-
-      defs[acId] = desc;
-      mins[acId] = 1;
-    }
-
-    // Second pass: check for **Status**: VALUE lines following AC headings
-    // Structured field overrides inline if both present
-    const structuredStatusPattern = /(?:^#+\s*|^[-*]\s*|^)(AC-[\d.]+)[:\s]+.+\n\*\*Status\*\*:\s*(DONE|ACTIVE|OPEN)/gim;
-    let statusMatch;
-    while ((statusMatch = structuredStatusPattern.exec(content)) !== null) {
-      statuses[statusMatch[1]] = statusMatch[2].toUpperCase();
-    }
-
-    if (Object.keys(defs).length > 0) {
-      return { definitions: defs, minimums: mins, statuses, projectName: null };
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
-
-function loadACFromTestResults(results) {
-  const defs = {};
-  const mins = {};
-
-  function walkSuites(suites) {
-    for (const suite of suites) {
-      if (suite.specs) {
-        for (const spec of suite.specs) {
-          const acMatch = spec.title.match(/^(AC-[\d.]+)[:\s]+(.+)/);
-          if (acMatch) {
-            const acId = acMatch[1];
-            if (!defs[acId]) {
-              // Use the part after AC-X: as description (take first occurrence)
-              defs[acId] = acMatch[2].trim();
-              mins[acId] = 1;
-            }
-          }
-        }
-      }
-      if (suite.suites) walkSuites(suite.suites);
-    }
-  }
-  walkSuites(results.suites || []);
-
-  // For auto-detected ACs, try to derive a group description from the first test
-  // by stripping the specific test detail
-  if (Object.keys(defs).length > 0) {
-    return { definitions: defs, minimums: mins, statuses: {}, projectName: null };
-  }
-  return null;
-}
-
-function loadACFromDirectory(dirPath) {
-  if (!fs.existsSync(dirPath) || !fs.statSync(dirPath).isDirectory()) return null;
-  try {
-    const files = fs.readdirSync(dirPath).filter(f => f.endsWith('.md')).sort();
-    if (files.length === 0) return null;
-    const merged = { definitions: {}, minimums: {}, statuses: {}, projectName: null };
-    for (const file of files) {
-      const fromMd = loadACFromMarkdown(path.join(dirPath, file));
-      if (fromMd) {
-        Object.assign(merged.definitions, fromMd.definitions);
-        Object.assign(merged.minimums, fromMd.minimums);
-        Object.assign(merged.statuses, fromMd.statuses || {});
-        if (!merged.projectName && fromMd.projectName) merged.projectName = fromMd.projectName;
-      }
-    }
-    return Object.keys(merged.definitions).length > 0 ? merged : null;
-  } catch {
-    return null;
-  }
-}
-
-function getActivePathFromConfig(configPath) {
-  // Read teamwerk-config.yml and extract the active work items path
-  if (!fs.existsSync(configPath)) return null;
-  try {
-    const content = fs.readFileSync(configPath, 'utf8');
-    const config = parseSimpleYaml(content);
-
-    // New format: work-items.active
-    if (config['work-items'] && typeof config['work-items'] === 'object' && config['work-items']['active']) {
-      return config['work-items']['active'];
-    }
-
-    // Legacy format: acceptance-criteria.path
-    if (config['acceptance-criteria'] && typeof config['acceptance-criteria'] === 'object' && config['acceptance-criteria']['path']) {
-      return config['acceptance-criteria']['path'];
-    }
-
-    return null;
-  } catch {
-    return null;
-  }
-}
-
-function loadACDefinitions(results) {
-  // Priority 1: Explicit config path
-  if (cliConfig) {
-    const resolved = path.isAbsolute(cliConfig) ? cliConfig : path.join(PROJECT_ROOT, cliConfig);
-    const fromConfig = loadACFromConfig(resolved);
-    if (fromConfig) return fromConfig;
-    console.warn(`Warning: Config file ${resolved} did not contain AC definitions.`);
-  }
-
-  // Priority 2: teamwerk-config.yml work-items.active path (file or directory)
-  const configPath = path.join(PROJECT_ROOT, 'teamwerk-config.yml');
-  const activePath = getActivePathFromConfig(configPath);
-  if (activePath) {
-    const resolved = path.isAbsolute(activePath) ? activePath : path.join(PROJECT_ROOT, activePath);
-    if (fs.existsSync(resolved)) {
-      if (fs.statSync(resolved).isDirectory()) {
-        const fromDir = loadACFromDirectory(resolved);
-        if (fromDir) {
-          // Also try to get project name from config
-          const fromConfig = loadACFromConfig(configPath);
-          if (fromConfig && fromConfig.projectName) fromDir.projectName = fromConfig.projectName;
-          return fromDir;
-        }
-      } else {
-        const fromMd = loadACFromMarkdown(resolved);
-        if (fromMd) {
-          const fromConfig = loadACFromConfig(configPath);
-          if (fromConfig && fromConfig.projectName) fromMd.projectName = fromConfig.projectName;
-          return fromMd;
-        }
-      }
-    }
-  }
-
-  // Priority 3: teamwerk-config.yml inline AC definitions (legacy)
-  const fromConfig = loadACFromConfig(configPath);
-  if (fromConfig) return fromConfig;
-
-  // Priority 4: docs/acceptance-criteria.md (hardcoded fallback)
-  const mdCandidates = [
-    path.join(PROJECT_ROOT, 'docs', 'acceptance-criteria.md'),
-    path.join(PROJECT_ROOT, 'docs', 'acceptance_criteria.md'),
-    path.join(PROJECT_ROOT, 'acceptance-criteria.md'),
-  ];
-  for (const mdPath of mdCandidates) {
-    const fromMd = loadACFromMarkdown(mdPath);
-    if (fromMd) return fromMd;
-  }
-
-  // Priority 5: Auto-detect from test result names
-  const fromTests = loadACFromTestResults(results);
-  if (fromTests) return fromTests;
-
-  // Fallback: empty
-  console.warn('Warning: No AC definitions found. Report will group tests by detected AC prefixes.');
-  return { definitions: {}, minimums: {}, statuses: {}, projectName: null };
-}
-
-// --- Utility Functions ---
-
-function stripAnsi(str) {
-  return str.replace(/\u001b\[\d+m/g, '');
-}
-
-function extractAC(title) {
-  const match = title.match(/^(AC-[\d.]+)/);
-  return match ? match[1] : null;
-}
-
-function readImageAsBase64(filePath) {
-  try {
-    const data = fs.readFileSync(filePath);
-    const ext = path.extname(filePath).slice(1);
-    const mime = ext === 'jpg' ? 'jpeg' : ext;
-    return `data:image/${mime};base64,${data.toString('base64')}`;
-  } catch {
-    return null;
-  }
-}
-
-function escapeHtml(str) {
-  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
-
-function formatDuration(ms) {
-  if (ms < 1000) return `${ms}ms`;
-  return `${(ms / 1000).toFixed(1)}s`;
-}
-
-function getScreenshotAC(filename) {
-  const match = filename.match(/^(ac\d+)/i);
-  if (match) return 'AC-' + match[1].replace(/^ac/i, '');
-  return null;
-}
-
-function getScreenshotDescription(filename) {
-  // Generate human-readable description from filename
-  // e.g., "ac1-empty-title-error.png" -> "Empty title error"
-  const withoutExt = filename.replace(/\.\w+$/, '');
-  const withoutAC = withoutExt.replace(/^ac\d+-?/i, '');
-  if (!withoutAC) return filename;
-  return withoutAC.split(/[-_]/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
-}
-
-// --- Multi-Format Parsers ---
-
-/**
- * Minimal XML tag parser (no external deps).
- * Returns array of {tag, attrs, children, text} nodes.
- * Handles self-closing tags and nested structures.
- */
-function parseXmlSimple(xml) {
-  const nodes = [];
-  // Remove XML declaration and comments
-  xml = xml.replace(/<\?xml[^?]*\?>/g, '').replace(/<!--[\s\S]*?-->/g, '').trim();
-
-  const tagRe = /<(\/?)([\w:.-]+)((?:\s+[\w:.-]+\s*=\s*"[^"]*")*)\s*(\/?)>/g;
-  const stack = [{ children: nodes }];
-  let lastIndex = 0;
-  let match;
-
-  while ((match = tagRe.exec(xml)) !== null) {
-    const [fullMatch, isClosing, tagName, attrsStr, selfClosing] = match;
-    const textBefore = xml.slice(lastIndex, match.index).trim();
-
-    if (textBefore && stack.length > 0) {
-      stack[stack.length - 1].text = (stack[stack.length - 1].text || '') + textBefore;
-    }
-
-    if (isClosing) {
-      // Closing tag — pop stack
-      if (stack.length > 1) stack.pop();
-    } else {
-      // Parse attributes
-      const attrs = {};
-      const attrRe = /([\w:.-]+)\s*=\s*"([^"]*)"/g;
-      let attrMatch;
-      while ((attrMatch = attrRe.exec(attrsStr)) !== null) {
-        attrs[attrMatch[1]] = attrMatch[2];
-      }
-
-      const node = { tag: tagName, attrs, children: [], text: '' };
-      stack[stack.length - 1].children = stack[stack.length - 1].children || [];
-      stack[stack.length - 1].children.push(node);
-
-      if (!selfClosing) {
-        stack.push(node);
-      }
-    }
-    lastIndex = match.index + fullMatch.length;
-  }
-
-  return nodes;
-}
-
-function findNodes(nodes, tagName) {
-  const results = [];
-  for (const node of nodes) {
-    if (node.tag === tagName) results.push(node);
-    if (node.children) results.push(...findNodes(node.children, tagName));
-  }
-  return results;
-}
-
-/**
- * Parse JUnit XML format into Playwright-compatible structure.
- * JUnit XML: <testsuites> -> <testsuite> -> <testcase> with optional <failure>/<error>
- * Used by: Maestro, Java (Maven/Gradle), pytest --junitxml, Go
- */
-function parseJUnitXML(content) {
-  const nodes = parseXmlSimple(content);
-  const testcases = findNodes(nodes, 'testcase');
-
-  const suites = {};
-  for (const tc of testcases) {
-    const name = tc.attrs.name || 'Unknown Test';
-    const classname = tc.attrs.classname || tc.attrs.class || '';
-    const time = parseFloat(tc.attrs.time || '0') * 1000; // seconds -> ms
-    const failures = findNodes(tc.children || [], 'failure');
-    const errors = findNodes(tc.children || [], 'error');
-    const skipped = findNodes(tc.children || [], 'skipped');
-
-    let status = 'passed';
-    const errorMessages = [];
-    if (failures.length > 0) {
-      status = 'failed';
-      for (const f of failures) errorMessages.push(f.attrs.message || f.text || 'Test failed');
-    }
-    if (errors.length > 0) {
-      status = 'failed';
-      for (const e of errors) errorMessages.push(e.attrs.message || e.text || 'Test error');
-    }
-    if (skipped.length > 0) status = 'skipped';
-
-    const suiteName = classname || 'Default Suite';
-    if (!suites[suiteName]) suites[suiteName] = { file: classname, specs: [] };
-    suites[suiteName].specs.push({
-      title: name,
-      tests: [{
-        projectName: classname.includes('api') || classname.includes('API') ? 'api' : 'e2e',
-        results: [{
-          status,
-          duration: time,
-          stdout: [],
-          errors: errorMessages.map(m => ({ message: m })),
-        }],
-      }],
-      line: 0,
-    });
-  }
-
-  return {
-    suites: Object.values(suites).map(s => ({
-      file: s.file,
-      specs: s.specs,
-      suites: [],
-    })),
+function parseArgs() {
+  const args = process.argv.slice(2);
+  const opts = {
+    input: "test-reports/e2e-results",
+    output: "test-reports/e2e-report.html",
+    tests: "__tests__/e2e/screens",
+    screenshots: "",
+    mode: "ac",
+    format: "auto",
+    reviewer: "",
+    config: "",
+    logo: "",
+    companyName: "",
+    title: "E2E Evidence Report",
   };
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === "--input" && args[i + 1]) opts.input = args[++i];
+    else if (args[i] === "--output" && args[i + 1]) opts.output = args[++i];
+    else if (args[i] === "--mode" && args[i + 1]) opts.mode = args[++i];
+    else if (args[i] === "--format" && args[i + 1]) opts.format = args[++i];
+    else if (args[i] === "--tests" && args[i + 1]) opts.tests = args[++i];
+    else if (args[i] === "--screenshots" && args[i + 1]) opts.screenshots = args[++i];
+    else if (args[i] === "--reviewer" && args[i + 1]) opts.reviewer = args[++i];
+    else if (args[i] === "--config" && args[i + 1]) opts.config = args[++i];
+    else if (args[i] === "--logo" && args[i + 1]) opts.logo = args[++i];
+    else if (args[i] === "--company-name" && args[i + 1]) opts.companyName = args[++i];
+    else if (args[i] === "--title" && args[i + 1]) opts.title = args[++i];
+    else if (args[i] === "--help") {
+      console.log("Usage: report-generator.js [--input <dir>] [--output <file>] [--mode ac|regression] [--format auto|junit-xml|playwright-json|trx] [--tests <yaml-dir>] [--screenshots <dir>] [--reviewer <adversarial-review.md>] [--config <teamwerk-config.yml>] [--logo <file>] [--company-name <name>] [--title <title>]");
+      process.exit(0);
+    }
+  }
+  return opts;
 }
 
-/**
- * Parse TRX (Visual Studio Test Results) format into Playwright-compatible structure.
- * TRX: <TestRun> -> <Results> -> <UnitTestResult> with outcome attribute
- * Used by: dotnet test, MSTest, NUnit, xUnit (.NET)
- */
-function parseTRX(content) {
-  const nodes = parseXmlSimple(content);
-  const unitResults = findNodes(nodes, 'UnitTestResult');
+// ---------------------------------------------------------------------------
+// Playwright JSON parser — converts Playwright format to JUnit-compatible structure
+// ---------------------------------------------------------------------------
 
-  const suites = {};
-  for (const ur of unitResults) {
-    const name = ur.attrs.testName || 'Unknown Test';
-    const outcome = (ur.attrs.outcome || '').toLowerCase();
-    const duration = ur.attrs.duration || '00:00:00';
+function parsePlaywrightJSON(jsonContent) {
+  const results = typeof jsonContent === 'string' ? JSON.parse(jsonContent) : jsonContent;
+  const suites = [];
 
-    // Parse duration "HH:MM:SS.mmm" to milliseconds
-    const durationParts = duration.split(':');
-    let durationMs = 0;
-    if (durationParts.length === 3) {
-      const [h, m, s] = durationParts;
-      durationMs = (parseInt(h) * 3600 + parseInt(m) * 60 + parseFloat(s)) * 1000;
-    }
-
-    let status = 'passed';
-    const errorMessages = [];
-    if (outcome === 'failed') {
-      status = 'failed';
-      const outputs = findNodes(ur.children || [], 'Output');
-      for (const out of outputs) {
-        const errInfos = findNodes(out.children || [], 'ErrorInfo');
-        for (const ei of errInfos) {
-          const msgs = findNodes(ei.children || [], 'Message');
-          for (const m of msgs) {
-            if (m.text) errorMessages.push(m.text);
-          }
-        }
-      }
-      if (errorMessages.length === 0) errorMessages.push('Test failed');
-    } else if (outcome === 'notexecuted' || outcome === 'inconclusive') {
-      status = 'skipped';
-    }
-
-    // Group by test class
-    const className = ur.attrs.testId ? name.split('.').slice(0, -1).join('.') : 'Default Suite';
-    if (!suites[className]) suites[className] = { file: className, specs: [] };
-    suites[className].specs.push({
-      title: name,
-      tests: [{
-        projectName: name.includes('Api') || name.includes('API') || name.includes('api') ? 'api' : 'e2e',
-        results: [{
-          status,
-          duration: durationMs,
-          stdout: [],
-          errors: errorMessages.map(m => ({ message: m })),
-        }],
-      }],
-      line: 0,
-    });
-  }
-
-  return {
-    suites: Object.values(suites).map(s => ({
-      file: s.file,
-      specs: s.specs,
-      suites: [],
-    })),
-  };
-}
-
-/**
- * Detect result format from file content.
- */
-function detectFormat(content, filePath) {
-  if (cliFormat !== 'auto') return cliFormat;
-
-  const ext = path.extname(filePath).toLowerCase();
-  if (ext === '.trx') return 'trx';
-
-  const trimmed = content.trim();
-  if (trimmed.startsWith('{')) return 'playwright-json';
-  if (trimmed.startsWith('<')) {
-    if (trimmed.includes('<TestRun') || trimmed.includes('<testrun')) return 'trx';
-    if (trimmed.includes('<testsuites') || trimmed.includes('<testsuite')) return 'junit-xml';
-  }
-
-  // Default to Playwright JSON
-  return 'playwright-json';
-}
-
-/**
- * Parse results file based on format.
- */
-function parseResults(content, format) {
-  switch (format) {
-    case 'junit-xml':
-      return parseJUnitXML(content);
-    case 'trx':
-      return parseTRX(content);
-    case 'playwright-json':
-    default:
-      return JSON.parse(content);
-  }
-}
-
-// --- Adversarial Review Parser ---
-
-/**
- * Parse adversarial-review.md into structured findings.
- * Extracts per-AC verdicts (PASS/FAIL/WARN) and details.
- */
-function parseReviewerFindings(reviewPath) {
-  if (!reviewPath || !fs.existsSync(reviewPath)) return null;
-  try {
-    const content = fs.readFileSync(reviewPath, 'utf8');
-    const findings = { summary: {}, acs: [], stubAudit: [] };
-
-    // Extract summary counts
-    const passMatch = content.match(/PASS:\s*(\d+)/);
-    const failMatch = content.match(/FAIL:\s*(\d+)/);
-    const warnMatch = content.match(/WARN:\s*(\d+)/);
-    findings.summary.pass = passMatch ? parseInt(passMatch[1]) : 0;
-    findings.summary.fail = failMatch ? parseInt(failMatch[1]) : 0;
-    findings.summary.warn = warnMatch ? parseInt(warnMatch[1]) : 0;
-
-    // Extract per-AC findings
-    const acPattern = /^## (AC-[\d.]+):\s*(.+?)\s*[—-]+\s*(PASS|FAIL|WARN)\s*$/gm;
-    let acMatch;
-    const acPositions = [];
-    while ((acMatch = acPattern.exec(content)) !== null) {
-      acPositions.push({
-        ac: acMatch[1],
-        title: acMatch[2].trim(),
-        verdict: acMatch[3],
-        startIdx: acMatch.index,
-      });
-    }
-
-    // Extract content between AC headers
-    for (let i = 0; i < acPositions.length; i++) {
-      const start = acPositions[i].startIdx;
-      const end = i + 1 < acPositions.length ? acPositions[i + 1].startIdx : content.length;
-      const section = content.slice(start, end);
-
-      // Extract checklist items
-      const items = [];
-      const itemPattern = /^- \[([ x])\] (.+)$/gm;
-      let itemMatch;
-      while ((itemMatch = itemPattern.exec(section)) !== null) {
-        items.push({
-          checked: itemMatch[1] === 'x',
-          text: itemMatch[2].trim(),
-        });
-      }
-
-      findings.acs.push({
-        ac: acPositions[i].ac,
-        title: acPositions[i].title,
-        verdict: acPositions[i].verdict,
-        items,
-      });
-    }
-
-    // Extract stub audit table
-    const stubPattern = /\|\s*(.+?)\s*\|\s*(STUBBED|IMPLEMENTED)\s*\|\s*(YES|NO)\b/g;
-    let stubMatch;
-    while ((stubMatch = stubPattern.exec(content)) !== null) {
-      findings.stubAudit.push({
-        feature: stubMatch[1].trim(),
-        status: stubMatch[2],
-        acceptable: stubMatch[3] === 'YES',
-      });
-    }
-
-    return findings;
-  } catch {
-    console.warn('Warning: Could not parse adversarial review file.');
-    return null;
-  }
-}
-
-/**
- * Generate HTML for adversarial review findings section.
- */
-function generateReviewerHtml(findings) {
-  if (!findings) return '';
-
-  let html = '';
-
-  // Summary badges
-  html += `<div style="display:flex;gap:12px;margin-bottom:16px;">
-    <span class="pass-badge" style="font-size:14px;padding:4px 12px;">PASS: ${findings.summary.pass}</span>
-    <span class="fail-badge" style="font-size:14px;padding:4px 12px;">FAIL: ${findings.summary.fail}</span>
-    <span class="skip-badge" style="font-size:14px;padding:4px 12px;">WARN: ${findings.summary.warn}</span>
-  </div>\n`;
-
-  // Per-AC findings
-  for (const ac of findings.acs) {
-    const badgeClass = ac.verdict === 'PASS' ? 'pass-badge' : ac.verdict === 'FAIL' ? 'fail-badge' : 'skip-badge';
-    html += `<div class="ac-section" style="margin-bottom:12px;">
-  <details${ac.verdict === 'FAIL' ? ' open' : ''}>
-    <summary style="padding:12px 16px;cursor:pointer;display:flex;align-items:center;gap:8px;background:#1a1d27;border:1px solid ${ac.verdict === 'FAIL' ? '#7f1d1d' : '#2d2d44'};border-radius:6px;">
-      <span class="${badgeClass}">${ac.verdict}</span>
-      <span style="font-weight:600;">${escapeHtml(ac.ac)}: ${escapeHtml(ac.title)}</span>
-    </summary>
-    <div style="padding:12px 16px;background:#12141c;border:1px solid #1f2233;border-top:0;border-radius:0 0 6px 6px;">\n`;
-
-    for (const item of ac.items) {
-      const icon = item.checked ? '&#x2705;' : '&#x274C;';
-      const style = item.checked ? '' : 'color:#fca5a5;font-weight:600;';
-      html += `      <div style="margin:4px 0;${style}">${icon} ${escapeHtml(item.text)}</div>\n`;
-    }
-
-    html += `    </div>\n  </details>\n</div>\n`;
-  }
-
-  // Stub audit
-  if (findings.stubAudit.length > 0) {
-    html += `<h4 style="margin:20px 0 8px;font-size:13px;color:#9ca3af;text-transform:uppercase;letter-spacing:0.5px;">Stub Audit</h4>\n`;
-    html += `<table><thead><tr><th>Feature</th><th>Status</th><th>Acceptable?</th></tr></thead><tbody>\n`;
-    for (const stub of findings.stubAudit) {
-      const badge = stub.acceptable
-        ? '<span class="pass-badge">YES</span>'
-        : '<span class="fail-badge">NO</span>';
-      html += `<tr><td>${escapeHtml(stub.feature)}</td><td>${stub.status}</td><td>${badge}</td></tr>\n`;
-    }
-    html += `</tbody></table>\n`;
-  }
-
-  return html;
-}
-
-// --- Main ---
-
-function main() {
-  const RESULTS_PATH = findResultsFile();
-  const TEMPLATE_PATH = findTemplatePath();
-  const OUTPUT_PATH = findOutputPath();
-  const EVIDENCE_DIR = findEvidenceDir();
-
-  const rawContent = fs.readFileSync(RESULTS_PATH, 'utf8');
-  const format = detectFormat(rawContent, RESULTS_PATH);
-  const results = parseResults(rawContent, format);
-  const template = fs.readFileSync(TEMPLATE_PATH, 'utf8');
-
-  // Parse adversarial review findings if provided
-  const reviewerPath = cliReviewer
-    ? (path.isAbsolute(cliReviewer) ? cliReviewer : path.join(PROJECT_ROOT, cliReviewer))
-    : path.join(PROJECT_ROOT, 'docs', 'adversarial-review.md');
-  const reviewerFindings = parseReviewerFindings(
-    cliReviewer ? reviewerPath : (fs.existsSync(reviewerPath) ? reviewerPath : null)
-  );
-
-  console.log(`  Format: ${format}`);
-
-  // Load AC definitions
-  const acData = loadACDefinitions(results);
-  const AC_DEFINITIONS = acData.definitions;
-  const AC_MINIMUMS = acData.minimums;
-  const AC_STATUSES = acData.statuses || {};
-  const projectName = acData.projectName || path.basename(PROJECT_ROOT);
-
-  // Extract all test specs (handle nested suites)
-  const allTests = [];
-  function walkSuites(suites) {
-    for (const suite of suites) {
+  function walkSuites(pwSuites) {
+    for (const suite of pwSuites) {
       if (suite.specs) {
         for (const spec of suite.specs) {
           if (!spec.tests || spec.tests.length === 0) continue;
           const test = spec.tests[0];
           if (!test.results || test.results.length === 0) continue;
           const result = test.results[0];
-          const stdout = (result.stdout || []).map(s => stripAnsi(s.text || '')).join('');
-          allTests.push({
-            title: spec.title,
-            ac: extractAC(spec.title),
+          const stdout = (result.stdout || []).map(s => typeof s === 'string' ? s : (s.text || '')).join('');
+          suites.push({
+            name: spec.title,
             file: suite.file || '',
-            line: spec.line,
-            status: result.status,
-            duration: result.duration,
+            time: (result.duration || 0) / 1000,
+            status: result.status === 'passed' ? 'passed' : 'failed',
+            error: result.errors && result.errors.length > 0
+              ? result.errors.map(e => e.message || JSON.stringify(e)).join('\n')
+              : '',
             stdout,
-            errors: result.errors || [],
-            project: test.projectName,
           });
         }
       }
@@ -800,228 +123,1583 @@ function main() {
     }
   }
   walkSuites(results.suites || []);
+  return suites;
+}
 
-  // Discover additional ACs from test results that weren't in definitions
-  for (const t of allTests) {
-    if (t.ac && !AC_DEFINITIONS[t.ac]) {
-      AC_DEFINITIONS[t.ac] = t.title.replace(/^AC-[\d.]+[:\s]+/, '').substring(0, 60);
-      AC_MINIMUMS[t.ac] = 1;
+// ---------------------------------------------------------------------------
+// TRX (.NET) parser — converts Visual Studio Test Results to flat test list
+// ---------------------------------------------------------------------------
+
+function parseTRXContent(xml) {
+  const suites = [];
+  const resultRe = /<UnitTestResult\b([^>]*)(?:\/>|>([\s\S]*?)<\/UnitTestResult>)/g;
+  let match;
+  while ((match = resultRe.exec(xml))) {
+    const attrs = {};
+    const attrRe = /(\w[\w.-]*)="([^"]*)"/g;
+    let am;
+    while ((am = attrRe.exec(match[1]))) attrs[am[1]] = am[2];
+
+    const name = attrs.testName || 'Unknown Test';
+    const outcome = (attrs.outcome || '').toLowerCase();
+    const duration = attrs.duration || '00:00:00';
+
+    // Parse "HH:MM:SS.mmm" to seconds
+    const durationParts = duration.split(':');
+    let timeSec = 0;
+    if (durationParts.length === 3) {
+      const [h, m, s] = durationParts;
+      timeSec = parseInt(h) * 3600 + parseInt(m) * 60 + parseFloat(s);
     }
-  }
 
-  // Stats
-  const totalTests = allTests.length;
-  const passed = allTests.filter(t => t.status === 'passed').length;
-  const failed = allTests.filter(t => t.status !== 'passed').length;
-  const totalDuration = allTests.reduce((sum, t) => sum + t.duration, 0);
-
-  // Group tests by AC
-  const acGroups = {};
-  for (const ac of Object.keys(AC_DEFINITIONS)) {
-    acGroups[ac] = allTests.filter(t => t.ac === ac);
-  }
-
-  // Group screenshots by AC
-  const evidenceFiles = EVIDENCE_DIR
-    ? fs.readdirSync(EVIDENCE_DIR).filter(f => /\.(png|jpg|jpeg|gif|webp)$/i.test(f)).sort()
-    : [];
-  const screenshotsByAC = {};
-  for (const file of evidenceFiles) {
-    const ac = getScreenshotAC(file);
-    if (ac) {
-      if (!screenshotsByAC[ac]) screenshotsByAC[ac] = [];
-      screenshotsByAC[ac].push(file);
+    let status = 'passed';
+    let errorMsg = '';
+    if (outcome === 'failed') {
+      status = 'failed';
+      const msgMatch = (match[2] || '').match(/<Message>([\s\S]*?)<\/Message>/);
+      errorMsg = msgMatch ? msgMatch[1].trim() : 'Test failed';
+    } else if (outcome === 'notexecuted' || outcome === 'inconclusive') {
+      status = 'skipped';
     }
+
+    suites.push({ name, file: '', time: timeSec, status, error: errorMsg, stdout: '' });
+  }
+  return suites;
+}
+
+// ---------------------------------------------------------------------------
+// Format auto-detection
+// ---------------------------------------------------------------------------
+
+function detectResultFormat(content, filePath, cliFormat) {
+  if (cliFormat && cliFormat !== 'auto') return cliFormat;
+  const ext = path.extname(filePath || '').toLowerCase();
+  if (ext === '.trx') return 'trx';
+  const trimmed = (content || '').trim();
+  if (trimmed.startsWith('{')) return 'playwright-json';
+  if (trimmed.startsWith('<')) {
+    if (trimmed.includes('<TestRun') || trimmed.includes('<testrun')) return 'trx';
+    if (trimmed.includes('<testsuites') || trimmed.includes('<testsuite')) return 'junit-xml';
+  }
+  return 'junit-xml';
+}
+
+// ---------------------------------------------------------------------------
+// Adversarial review parser
+// ---------------------------------------------------------------------------
+
+function parseAdversarialReview(reviewPath) {
+  if (!reviewPath || !fs.existsSync(reviewPath)) return null;
+  try {
+    const content = fs.readFileSync(reviewPath, 'utf8');
+    const findings = { summary: {}, acs: [], stubAudit: [] };
+
+    const passMatch = content.match(/PASS:\s*(\d+)/);
+    const failMatch = content.match(/FAIL:\s*(\d+)/);
+    const warnMatch = content.match(/WARN:\s*(\d+)/);
+    findings.summary.pass = passMatch ? parseInt(passMatch[1]) : 0;
+    findings.summary.fail = failMatch ? parseInt(failMatch[1]) : 0;
+    findings.summary.warn = warnMatch ? parseInt(warnMatch[1]) : 0;
+
+    const acPattern = /^## (AC-[\d.]+):\s*(.+?)\s*[—-]+\s*(PASS|FAIL|WARN)\s*$/gm;
+    let acMatch;
+    const acPositions = [];
+    while ((acMatch = acPattern.exec(content)) !== null) {
+      acPositions.push({ ac: acMatch[1], title: acMatch[2].trim(), verdict: acMatch[3], startIdx: acMatch.index });
+    }
+
+    for (let i = 0; i < acPositions.length; i++) {
+      const start = acPositions[i].startIdx;
+      const end = i + 1 < acPositions.length ? acPositions[i + 1].startIdx : content.length;
+      const section = content.slice(start, end);
+      const items = [];
+      const itemPattern = /^- \[([ x])\] (.+)$/gm;
+      let itemMatch;
+      while ((itemMatch = itemPattern.exec(section)) !== null) {
+        items.push({ checked: itemMatch[1] === 'x', text: itemMatch[2].trim() });
+      }
+      findings.acs.push({ ac: acPositions[i].ac, title: acPositions[i].title, verdict: acPositions[i].verdict, items });
+    }
+
+    const stubPattern = /\|\s*(.+?)\s*\|\s*(STUBBED|IMPLEMENTED)\s*\|\s*(YES|NO)\b/g;
+    let stubMatch;
+    while ((stubMatch = stubPattern.exec(content)) !== null) {
+      findings.stubAudit.push({ feature: stubMatch[1].trim(), status: stubMatch[2], acceptable: stubMatch[3] === 'YES' });
+    }
+
+    return findings;
+  } catch { return null; }
+}
+
+function generateAdversarialReviewHtml(findings) {
+  if (!findings) return '';
+  const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  let html = '<div style="margin:24px 0;">';
+  html += '<h3 style="color:#e5e7eb;margin-bottom:12px;">Adversarial Review Findings</h3>';
+  html += `<div style="display:flex;gap:12px;margin-bottom:16px;">
+    <span style="background:#166534;color:#fff;padding:4px 12px;border-radius:4px;">PASS: ${findings.summary.pass}</span>
+    <span style="background:#991b1b;color:#fff;padding:4px 12px;border-radius:4px;">FAIL: ${findings.summary.fail}</span>
+    <span style="background:#92400e;color:#fff;padding:4px 12px;border-radius:4px;">WARN: ${findings.summary.warn}</span>
+  </div>`;
+
+  for (const ac of findings.acs) {
+    const color = ac.verdict === 'PASS' ? '#166534' : ac.verdict === 'FAIL' ? '#991b1b' : '#92400e';
+    html += `<details${ac.verdict === 'FAIL' ? ' open' : ''} style="margin:8px 0;">
+      <summary style="padding:10px 14px;cursor:pointer;background:#1a1d27;border:1px solid ${ac.verdict === 'FAIL' ? '#7f1d1d' : '#2d2d44'};border-radius:6px;">
+        <span style="background:${color};color:#fff;padding:2px 8px;border-radius:3px;font-size:12px;">${ac.verdict}</span>
+        <span style="margin-left:8px;font-weight:600;color:#e5e7eb;">${esc(ac.ac)}: ${esc(ac.title)}</span>
+      </summary>
+      <div style="padding:10px 14px;background:#12141c;border:1px solid #1f2233;border-top:0;border-radius:0 0 6px 6px;">`;
+    for (const item of ac.items) {
+      const icon = item.checked ? '&#x2705;' : '&#x274C;';
+      html += `<div style="margin:3px 0;${item.checked ? '' : 'color:#fca5a5;font-weight:600;'}">${icon} ${esc(item.text)}</div>`;
+    }
+    html += '</div></details>';
   }
 
-  // --- AC Traceability Matrix ---
-  let acRows = '';
-  for (const [ac, desc] of Object.entries(AC_DEFINITIONS)) {
-    const tests = acGroups[ac] || [];
-    const passCount = tests.filter(t => t.status === 'passed').length;
-    const failCount = tests.filter(t => t.status !== 'passed').length;
-    const total = tests.length;
-    const min = AC_MINIMUMS[ac] || 1;
-    const meetsMinimum = total >= min;
-    const allPass = failCount === 0 && total > 0;
-    const statusBadge = allPass && meetsMinimum
-      ? '<span class="pass-badge">PASS</span>'
-      : (failCount > 0 ? '<span class="fail-badge">FAIL</span>' : '<span class="skip-badge">BELOW MIN</span>');
-
-    const workStatus = AC_STATUSES[ac] || 'OPEN';
-    const workStatusBadge = workStatus === 'DONE'
-      ? '<span class="done-badge">DONE</span>'
-      : workStatus === 'ACTIVE'
-        ? '<span class="active-badge">ACTIVE</span>'
-        : '<span class="open-badge">OPEN</span>';
-
-    acRows += `<tr class="ac-row" data-ac="${ac}">
-      <td><strong>${ac}</strong></td>
-      <td>${escapeHtml(desc)}</td>
-      <td>${workStatusBadge}</td>
-      <td>${total} (min: ${min})</td>
-      <td>${passCount}</td>
-      <td>${failCount}</td>
-      <td>${statusBadge}</td>
-    </tr>\n`;
+  if (findings.stubAudit.length > 0) {
+    html += '<h4 style="margin:20px 0 8px;font-size:13px;color:#9ca3af;text-transform:uppercase;">Stub Audit</h4>';
+    html += '<table style="width:100%;border-collapse:collapse;"><thead><tr><th style="text-align:left;padding:6px;border-bottom:1px solid #333;">Feature</th><th style="padding:6px;border-bottom:1px solid #333;">Status</th><th style="padding:6px;border-bottom:1px solid #333;">Acceptable?</th></tr></thead><tbody>';
+    for (const stub of findings.stubAudit) {
+      const badge = stub.acceptable
+        ? '<span style="background:#166534;color:#fff;padding:2px 6px;border-radius:3px;font-size:11px;">YES</span>'
+        : '<span style="background:#991b1b;color:#fff;padding:2px 6px;border-radius:3px;font-size:11px;">NO</span>';
+      html += `<tr><td style="padding:6px;border-bottom:1px solid #222;">${esc(stub.feature)}</td><td style="padding:6px;border-bottom:1px solid #222;text-align:center;">${stub.status}</td><td style="padding:6px;border-bottom:1px solid #222;text-align:center;">${badge}</td></tr>`;
+    }
+    html += '</tbody></table>';
   }
 
-  // --- AC Detail Sections ---
-  let acDetailSections = '';
-  for (const [ac, desc] of Object.entries(AC_DEFINITIONS)) {
-    const tests = acGroups[ac] || [];
-    if (tests.length === 0) continue;
+  html += '</div>';
+  return html;
+}
 
-    const passCount = tests.filter(t => t.status === 'passed').length;
-    const failCount = tests.filter(t => t.status !== 'passed').length;
-    const acDuration = tests.reduce((sum, t) => sum + t.duration, 0);
-    const allPass = failCount === 0;
-    const statusBadge = allPass
-      ? '<span class="pass-badge">PASS</span>'
-      : '<span class="fail-badge">FAIL</span>';
-    const apiCount = tests.filter(t => t.project === 'api').length;
-    const e2eCount = tests.filter(t => t.project !== 'api').length;
-    const screenshots = screenshotsByAC[ac] || [];
+// ---------------------------------------------------------------------------
+// Teamwerk config-based AC loading
+// ---------------------------------------------------------------------------
 
-    acDetailSections += `<div class="ac-section" id="ac-${ac}" data-status="${allPass ? 'pass' : 'fail'}">
-  <details>
-    <summary>
-      <span class="ac-title">${ac}: ${escapeHtml(desc)}</span>
-      <span class="ac-stats">
-        ${statusBadge}
-        <span>${tests.length} tests</span>
-        ${apiCount > 0 ? `<span class="api-badge">API ${apiCount}</span>` : ''}
-        ${e2eCount > 0 ? `<span class="e2e-badge">E2E ${e2eCount}</span>` : ''}
-        <span>${formatDuration(acDuration)}</span>
-        ${screenshots.length > 0 ? `<span>${screenshots.length} screenshots</span>` : ''}
-      </span>
-    </summary>
-    <div class="ac-content">\n`;
+function loadACsFromTeamwerkConfig(configPath) {
+  if (!configPath || !fs.existsSync(configPath)) return null;
+  try {
+    const content = fs.readFileSync(configPath, 'utf8');
+    // Simple YAML parser for work-items.active path
+    const activeMatch = content.match(/active:\s*"?([^"\n]+)"?/);
+    if (!activeMatch) return null;
+    const activePath = activeMatch[1].trim();
+    const resolved = path.isAbsolute(activePath) ? activePath : path.join(path.dirname(configPath), activePath);
+    if (!fs.existsSync(resolved)) return null;
 
-    // Tests within this AC
-    for (const t of tests) {
-      const badge = t.status === 'passed'
-        ? '<span class="pass-badge">PASS</span>'
-        : '<span class="fail-badge">FAIL</span>';
-      const typeBadge = t.project === 'api'
-        ? '<span class="api-badge">API</span>'
-        : '<span class="e2e-badge">E2E</span>';
+    const isDir = fs.statSync(resolved).isDirectory();
+    const files = isDir
+      ? fs.readdirSync(resolved).filter(f => f.endsWith('.md')).map(f => path.join(resolved, f))
+      : [resolved];
 
-      acDetailSections += `      <div class="test-card">
-        <div class="test-card-header">
-          ${badge} ${typeBadge}
-          <span class="test-name">${escapeHtml(t.title.replace(/^AC-\d+:\s*/, ''))}</span>
-          <span class="test-meta">${formatDuration(t.duration)} · ${escapeHtml(t.file)}:${t.line}</span>
-        </div>\n`;
+    const acs = {};
+    for (const file of files) {
+      const md = fs.readFileSync(file, 'utf8');
+      const acPattern = /(?:^#+\s*|^[-*]\s*|^)(AC-[\d.]+)[:\s]+(.+)/gm;
+      let m;
+      while ((m = acPattern.exec(md)) !== null) {
+        let desc = m[2].trim().replace(/\*+/g, '');
+        desc = desc.replace(/\s*[—–-]{1,2}\s*(DONE|ACTIVE|OPEN)\s*$/i, '').trim();
+        acs[m[1]] = desc;
+      }
+    }
+    return Object.keys(acs).length > 0 ? acs : null;
+  } catch { return null; }
+}
 
-      if (t.stdout.trim()) {
-        const lines = t.stdout.trim().split('\n').map(l => escapeHtml(l)).join('\n');
-        acDetailSections += `        <div class="log-block">${lines}</div>\n`;
+// ---------------------------------------------------------------------------
+// Minimal XML parser (no dependencies)
+// ---------------------------------------------------------------------------
+
+function parseXMLAttr(tag) {
+  const attrs = {};
+  const re = /(\w[\w.-]*)="([^"]*)"/g;
+  let m;
+  while ((m = re.exec(tag))) attrs[m[1]] = m[2];
+  return attrs;
+}
+
+function parseJUnitXML(xml) {
+  const suites = [];
+  const suiteRe = /<testsuite\b([^>]*)>([\s\S]*?)<\/testsuite>/g;
+  let suiteMatch;
+  while ((suiteMatch = suiteRe.exec(xml))) {
+    const suiteAttrs = parseXMLAttr(suiteMatch[1]);
+    const body = suiteMatch[2];
+    const tests = [];
+
+    const tcRe = /<testcase\b([^>]*?)(?:\/>|>([\s\S]*?)<\/testcase>)/g;
+    let tcMatch;
+    while ((tcMatch = tcRe.exec(body))) {
+      const tcAttrs = parseXMLAttr(tcMatch[1]);
+      const tcBody = tcMatch[2] || "";
+
+      let status = "passed";
+      let errorMessage = "";
+
+      if (/<failure\b/.test(tcBody)) {
+        status = "failed";
+        const failMsgMatch = tcBody.match(/<failure[^>]*(?:message="([^"]*)")?[^>]*>([\s\S]*?)<\/failure>/);
+        if (failMsgMatch) errorMessage = failMsgMatch[1] || failMsgMatch[2] || "";
+      } else if (/<error\b/.test(tcBody)) {
+        status = "error";
+        const errMsgMatch = tcBody.match(/<error[^>]*(?:message="([^"]*)")?[^>]*>([\s\S]*?)<\/error>/);
+        if (errMsgMatch) errorMessage = errMsgMatch[1] || errMsgMatch[2] || "";
+      } else if (/<skipped/.test(tcBody)) {
+        status = "skipped";
       }
 
-      if (t.errors.length > 0) {
-        for (const err of t.errors) {
-          const msg = err.message || JSON.stringify(err);
-          acDetailSections += `        <div class="log-block error-block">${escapeHtml(stripAnsi(msg))}</div>\n`;
+      tests.push({
+        name: tcAttrs.name || "unknown",
+        classname: tcAttrs.classname || "",
+        time: parseFloat(tcAttrs.time) || 0,
+        status,
+        errorMessage: decodeXMLEntities(errorMessage.trim()),
+      });
+    }
+
+    suites.push({
+      name: suiteAttrs.name || "unknown",
+      tests: parseInt(suiteAttrs.tests, 10) || tests.length,
+      failures: parseInt(suiteAttrs.failures, 10) || 0,
+      errors: parseInt(suiteAttrs.errors, 10) || 0,
+      time: parseFloat(suiteAttrs.time) || 0,
+      device: suiteAttrs.device || "",
+      testCases: tests,
+    });
+  }
+
+  return suites;
+}
+
+function decodeXMLEntities(str) {
+  return str
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'");
+}
+
+// ---------------------------------------------------------------------------
+// YAML comment parser — extracts test metadata from comment headers
+// ---------------------------------------------------------------------------
+
+function parseYAMLFile(yamlContent) {
+  const result = {
+    name: "",
+    acs: [],  // supports multiple: "# AC: AC-22.3, AC-22.6"
+    purpose: "",
+    expected: "",
+    preconditions: "",
+    screenshots: [],
+    steps: [],
+    tags: [],
+  };
+  const lines = yamlContent.split("\n");
+  let inSteps = false;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+
+    // Comment headers
+    const testMatch = trimmed.match(/^#\s*(?:--?\s*)?Test:\s*(.+?)\s*-*\s*$/);
+    if (testMatch) { result.name = testMatch[1]; continue; }
+
+    const acMatch = trimmed.match(/^#\s*AC:\s*(.+)$/);
+    if (acMatch) {
+      result.acs = acMatch[1].split(/[,;]+/).map((s) => s.trim()).filter(Boolean);
+      continue;
+    }
+
+    const purposeMatch = trimmed.match(/^#\s*Purpose:\s*(.+)$/);
+    if (purposeMatch) { result.purpose = purposeMatch[1].trim(); continue; }
+
+    const expectedMatch = trimmed.match(/^#\s*Expected:\s*(.+)$/);
+    if (expectedMatch) { result.expected = expectedMatch[1].trim(); continue; }
+
+    const precondMatch = trimmed.match(/^#\s*Preconditions?:\s*(.+)$/);
+    if (precondMatch) { result.preconditions = precondMatch[1].trim(); continue; }
+
+    // After the --- separator, we're in the steps section
+    if (trimmed === "---") { inSteps = true; continue; }
+
+    if (inSteps) {
+      // Parse YAML steps into human-readable descriptions
+      const screenshotMatch = trimmed.match(/^-\s*takeScreenshot:\s*(.+)$/);
+      if (screenshotMatch) {
+        const ssName = screenshotMatch[1].trim();
+        result.screenshots.push(ssName);
+        result.steps.push({ type: "screenshot", detail: ssName });
+        continue;
+      }
+
+      const runFlowMatch = trimmed.match(/^-\s*runFlow:\s*(.+)$/);
+      if (runFlowMatch) {
+        result.steps.push({ type: "runFlow", detail: runFlowMatch[1].trim() });
+        continue;
+      }
+
+      const assertVisMatch = trimmed.match(/^-\s*assertVisible:\s*$/);
+      if (assertVisMatch) {
+        result.steps.push({ type: "assertVisible", detail: "" });
+        continue;
+      }
+
+      const assertNotVisMatch = trimmed.match(/^-\s*assertNotVisible:\s*$/);
+      if (assertNotVisMatch) {
+        result.steps.push({ type: "assertNotVisible", detail: "" });
+        continue;
+      }
+
+      const tapOnMatch = trimmed.match(/^-\s*tapOn:\s*$/);
+      if (tapOnMatch) {
+        result.steps.push({ type: "tap", detail: "" });
+        continue;
+      }
+
+      const swipeMatch = trimmed.match(/^-\s*swipe:\s*$/);
+      if (swipeMatch) {
+        result.steps.push({ type: "swipe", detail: "" });
+        continue;
+      }
+
+      const waitAnimMatch = trimmed.match(/^-\s*waitForAnimationToEnd\s*$/);
+      if (waitAnimMatch) {
+        result.steps.push({ type: "waitAnimation", detail: "" });
+        continue;
+      }
+
+      const waitUntilMatch = trimmed.match(/^-\s*extendedWaitUntil:\s*$/);
+      if (waitUntilMatch) {
+        result.steps.push({ type: "waitUntil", detail: "" });
+        continue;
+      }
+
+      const pressKeyMatch = trimmed.match(/^-\s*pressKey:\s*(.+)$/);
+      if (pressKeyMatch) {
+        result.steps.push({ type: "pressKey", detail: pressKeyMatch[1].trim() });
+        continue;
+      }
+
+      // Inline text/id properties — attach to the last step
+      const textMatch = trimmed.match(/^text:\s*"?(.+?)"?\s*$/);
+      if (textMatch && result.steps.length > 0) {
+        const last = result.steps[result.steps.length - 1];
+        last.detail = (last.detail ? last.detail + " " : "") + `text: "${textMatch[1]}"`;
+        continue;
+      }
+
+      const idMatch = trimmed.match(/^id:\s*"?(.+?)"?\s*$/);
+      if (idMatch && result.steps.length > 0) {
+        const last = result.steps[result.steps.length - 1];
+        last.detail = (last.detail ? last.detail + " " : "") + `id: "${idMatch[1]}"`;
+        continue;
+      }
+
+      const dirMatch = trimmed.match(/^direction:\s*(.+)$/);
+      if (dirMatch && result.steps.length > 0) {
+        const last = result.steps[result.steps.length - 1];
+        last.detail = (last.detail ? last.detail + " " : "") + dirMatch[1].trim();
+        continue;
+      }
+
+      const startMatch = trimmed.match(/^start:\s*"?(.+?)"?\s*$/);
+      if (startMatch && result.steps.length > 0) {
+        const last = result.steps[result.steps.length - 1];
+        last.detail = (last.detail ? last.detail + " " : "") + `from ${startMatch[1]}`;
+        continue;
+      }
+
+      const endMatch = trimmed.match(/^end:\s*"?(.+?)"?\s*$/);
+      if (endMatch && result.steps.length > 0) {
+        const last = result.steps[result.steps.length - 1];
+        last.detail = (last.detail ? last.detail + " " : "") + `to ${endMatch[1]}`;
+        continue;
+      }
+
+      const timeoutMatch = trimmed.match(/^timeout:\s*(\d+)$/);
+      if (timeoutMatch && result.steps.length > 0) {
+        const last = result.steps[result.steps.length - 1];
+        last.detail = (last.detail ? last.detail + " " : "") + `(timeout: ${timeoutMatch[1]}ms)`;
+        continue;
+      }
+
+      // Inline comment — add as context to last step
+      const commentMatch = trimmed.match(/^#\s*(.+)$/);
+      if (commentMatch && result.steps.length > 0) {
+        const last = result.steps[result.steps.length - 1];
+        if (!last.comment) last.comment = commentMatch[1];
+      } else if (commentMatch) {
+        // Standalone comment before first step — add as a note step
+        result.steps.push({ type: "note", detail: commentMatch[1] });
+      }
+
+      // Visible block helpers
+      const visibleMatch = trimmed.match(/^visible:\s*$/);
+      if (visibleMatch && result.steps.length > 0) {
+        // next line will have the text
+        continue;
+      }
+    }
+  }
+
+  return result;
+}
+
+// ---------------------------------------------------------------------------
+// Screenshot discovery — searches multiple directories
+// ---------------------------------------------------------------------------
+
+function findScreenshots(...dirs) {
+  const screenshots = {};
+
+  for (const dir of dirs) {
+    if (!dir || !fs.existsSync(dir)) continue;
+
+    const walk = (d) => {
+      for (const entry of fs.readdirSync(d, { withFileTypes: true })) {
+        const full = path.join(d, entry.name);
+        if (entry.isDirectory()) {
+          walk(full);
+        } else if (/\.(png|jpg|jpeg)$/i.test(entry.name)) {
+          const key = path.basename(entry.name, path.extname(entry.name)).toLowerCase();
+          if (!screenshots[key]) screenshots[key] = [];
+          screenshots[key].push(full);
+        }
+      }
+    };
+    walk(dir);
+  }
+  return screenshots;
+}
+
+function toBase64DataURI(filePath) {
+  try {
+    const ext = path.extname(filePath).toLowerCase().replace(".", "");
+    const mime = ext === "png" ? "image/png" : "image/jpeg";
+    const data = fs.readFileSync(filePath).toString("base64");
+    return `data:${mime};base64,${data}`;
+  } catch {
+    return "";
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Auto-detect Maestro commands from ~/.maestro/tests/
+// ---------------------------------------------------------------------------
+
+function findMaestroCommands(inputDir) {
+  const commandsByTest = {};
+
+  // First check input dir for copied commands
+  if (inputDir && fs.existsSync(inputDir)) {
+    try {
+      for (const f of fs.readdirSync(inputDir)) {
+        const match = f.match(/^commands-\(?(.+?)\)?.json$/);
+        if (match) {
+          const key = match[1].replace(/\.yaml$/, "").toLowerCase();
+          commandsByTest[key] = path.join(inputDir, f);
+        }
+      }
+    } catch { /* skip */ }
+  }
+
+  // Then check ~/.maestro/tests/ for most recent runs
+  const maestroTestsDir = path.join(process.env.HOME || "~", ".maestro", "tests");
+  if (!fs.existsSync(maestroTestsDir)) return commandsByTest;
+
+  const dirs = fs.readdirSync(maestroTestsDir, { withFileTypes: true })
+    .filter((d) => d.isDirectory())
+    .map((d) => d.name)
+    .sort()
+    .reverse();
+
+  for (const dir of dirs) {
+    const fullDir = path.join(maestroTestsDir, dir);
+    try {
+      for (const f of fs.readdirSync(fullDir)) {
+        const match = f.match(/^commands-\(?(.+?)\)?.json$/);
+        if (match) {
+          const key = match[1].replace(/\.yaml$/, "").toLowerCase();
+          if (!commandsByTest[key]) {
+            commandsByTest[key] = path.join(fullDir, f);
+          }
+        }
+      }
+    } catch { /* skip */ }
+  }
+
+  return commandsByTest;
+}
+
+// ---------------------------------------------------------------------------
+// Parse Maestro commands JSON into steps
+// ---------------------------------------------------------------------------
+
+function parseCommandsJSON(jsonContent) {
+  try {
+    const commands = JSON.parse(jsonContent);
+    if (!Array.isArray(commands)) return [];
+    return commands.map((entry) => {
+      const cmd = entry.command || {};
+      const meta = entry.metadata || {};
+      let type = "unknown";
+      let detail = "";
+      let screenshotName = "";
+
+      if (cmd.assertConditionCommand) {
+        type = "assertVisible";
+        const cond = cmd.assertConditionCommand.condition || {};
+        if (cond.visible) {
+          detail = `text: "${cond.visible.textRegex || cond.visible.text || ""}"`;
+        } else if (cond.notVisible) {
+          type = "assertNotVisible";
+          detail = `text: "${cond.notVisible.textRegex || cond.notVisible.text || ""}"`;
+        }
+      } else if (cmd.tapOnElement) {
+        type = "tap";
+        const sel = cmd.tapOnElement.selector || {};
+        detail = sel.textRegex || sel.text || sel.id || "";
+      } else if (cmd.inputTextCommand || cmd.inputRandomTextCommand) {
+        type = "input";
+        const inputCmd = cmd.inputTextCommand || cmd.inputRandomTextCommand || {};
+        detail = inputCmd.text ? `"${inputCmd.text}"` : "(random)";
+      } else if (cmd.eraseTextCommand) {
+        type = "erase";
+        detail = `${cmd.eraseTextCommand.charactersToErase || "all"} chars`;
+      } else if (cmd.takeScreenshotCommand) {
+        type = "screenshot";
+        screenshotName = cmd.takeScreenshotCommand.path || "";
+        detail = screenshotName;
+      } else if (cmd.launchAppCommand) {
+        type = "launch";
+        detail = cmd.launchAppCommand.appId || "";
+      } else if (cmd.runFlowCommand) {
+        type = "runFlow";
+        detail = cmd.runFlowCommand.path || "";
+      } else if (cmd.waitForAnimationToEndCommand) {
+        type = "waitAnimation";
+      } else if (cmd.extendedWaitUntilCommand) {
+        type = "waitUntil";
+        const cond = cmd.extendedWaitUntilCommand.condition || {};
+        if (cond.visible) {
+          detail = `visible: "${cond.visible.textRegex || ""}"`;
+        }
+      } else if (cmd.swipeCommand) {
+        type = "swipe";
+        detail = cmd.swipeCommand.direction || "";
+      } else if (cmd.pressKeyCommand) {
+        type = "pressKey";
+        detail = cmd.pressKeyCommand.code || "";
+      } else {
+        const keys = Object.keys(cmd);
+        if (keys.length > 0) type = keys[0].replace(/Command$/, "");
+      }
+
+      return {
+        type,
+        detail,
+        screenshotName,
+        status: (meta.status || "UNKNOWN").toUpperCase(),
+        duration: meta.duration || 0,
+      };
+    });
+  } catch {
+    return [];
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Load YAML test metadata, grouped by screen
+// ---------------------------------------------------------------------------
+
+function loadTestMetadata(testsDir) {
+  const metadata = {};
+  if (!testsDir || !fs.existsSync(testsDir)) return metadata;
+
+  for (const entry of fs.readdirSync(testsDir, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+
+    const screenName = entry.name.toLowerCase();
+    const screenDir = path.join(testsDir, entry.name);
+    const scenarios = [];
+
+    const yamlFiles = fs.readdirSync(screenDir)
+      .filter((f) => /\.yaml$/i.test(f))
+      .sort();
+
+    for (const yamlFile of yamlFiles) {
+      try {
+        const content = fs.readFileSync(path.join(screenDir, yamlFile), "utf-8");
+        const parsed = parseYAMLFile(content);
+        parsed.fileName = yamlFile.replace(/\.yaml$/i, "");
+        if (!parsed.name) {
+          parsed.name = yamlFile
+            .replace(/\.yaml$/i, "")
+            .replace(/^\d+-/, "")
+            .replace(/-/g, " ")
+            .replace(/\b\w/g, (c) => c.toUpperCase());
+        }
+        scenarios.push(parsed);
+      } catch { /* skip */ }
+    }
+
+    if (scenarios.length > 0) {
+      metadata[screenName] = scenarios;
+    }
+  }
+
+  return metadata;
+}
+
+// ---------------------------------------------------------------------------
+// Derive screen name from XML filename
+// e.g. "home-01-date-format.xml" → screen "home", test "01-date-format"
+// e.g. "login-01-screen-renders.xml" → screen "login", test "01-screen-renders"
+// ---------------------------------------------------------------------------
+
+function parseXMLFileName(xmlFile) {
+  const base = path.basename(xmlFile, ".xml").toLowerCase();
+  // Pattern: {screen}-{NN}-{test-name} or {screen}-{test-name}
+  const match = base.match(/^([a-z]+)-(.+)$/);
+  if (match) {
+    return { screen: match[1], testKey: match[2] };
+  }
+  return { screen: base, testKey: base };
+}
+
+// ---------------------------------------------------------------------------
+// HTML helpers
+// ---------------------------------------------------------------------------
+
+function escapeHTML(str) {
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function formatDuration(seconds) {
+  if (seconds < 60) return `${seconds.toFixed(1)}s`;
+  const mins = Math.floor(seconds / 60);
+  const secs = (seconds % 60).toFixed(0);
+  return `${mins}m ${secs}s`;
+}
+
+function formatScreenName(name) {
+  return name
+    .split(/[-_]/)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ") + " Screen";
+}
+
+function statusIcon(status) {
+  if (status === "passed") return '<span class="icon-pass">&#10003;</span>';
+  if (status === "skipped") return '<span class="icon-skip">&#9679;</span>';
+  return '<span class="icon-fail">&#10007;</span>';
+}
+
+function stepTypeLabel(type) {
+  const labels = {
+    assertVisible: "Assert Visible",
+    assertNotVisible: "Assert Not Visible",
+    tap: "Tap",
+    input: "Input",
+    erase: "Erase",
+    screenshot: "Screenshot",
+    launch: "Launch App",
+    runFlow: "Run Flow",
+    waitAnimation: "Wait Animation",
+    waitUntil: "Wait Until",
+    swipe: "Swipe",
+    pressKey: "Press Key",
+    note: "Note",
+  };
+  return labels[type] || type;
+}
+
+function stepTypeClass(type) {
+  if (type === "screenshot") return "step-type step-type-screenshot";
+  if (type === "assertVisible" || type === "assertNotVisible") return "step-type step-type-assert";
+  if (type === "tap" || type === "input") return "step-type step-type-action";
+  return "step-type";
+}
+
+// ---------------------------------------------------------------------------
+// CSS
+// ---------------------------------------------------------------------------
+
+function getCSS() {
+  return `
+:root {
+  --bg: #fafafa;
+  --surface: #ffffff;
+  --surface-alt: #f5f5f5;
+  --border: #e5e7eb;
+  --border-light: #f0f0f0;
+  --text: #1f2937;
+  --text-muted: #6b7280;
+  --text-light: #9ca3af;
+  --pass: #22c55e;
+  --pass-bg: #f0fdf4;
+  --fail: #ef4444;
+  --fail-bg: #fef2f2;
+  --skip: #f59e0b;
+  --skip-bg: #fffbeb;
+  --accent: #3b82f6;
+  --header-bg: #ffffff;
+  --shadow: 0 1px 3px rgba(0,0,0,0.08);
+  --radius: 6px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.5;
+  font-size: 14px;
+}
+
+/* Header */
+.report-header {
+  background: var(--header-bg);
+  border-bottom: 1px solid var(--border);
+  padding: 16px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.report-header .title-area { display: flex; align-items: center; gap: 12px; }
+.report-header .logo { height: 28px; width: auto; }
+.report-header h1 { font-size: 18px; font-weight: 600; color: var(--text); }
+.report-header .company { font-size: 12px; color: var(--text-muted); font-weight: 400; }
+.summary-bar { display: flex; align-items: center; gap: 16px; font-size: 13px; }
+.summary-bar .stat { display: flex; align-items: center; gap: 4px; }
+.summary-bar .stat-value { font-weight: 600; font-size: 15px; }
+.badge {
+  display: inline-flex; align-items: center; gap: 3px;
+  padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: 600;
+}
+.badge-pass { background: var(--pass-bg); color: var(--pass); }
+.badge-fail { background: var(--fail-bg); color: var(--fail); }
+.badge-skip { background: var(--skip-bg); color: var(--skip); }
+.meta-bar {
+  background: var(--surface-alt); border-bottom: 1px solid var(--border-light);
+  padding: 6px 24px; font-size: 12px; color: var(--text-muted);
+  display: flex; gap: 20px; flex-wrap: wrap;
+}
+
+/* Content */
+.content { max-width: 1200px; margin: 0 auto; padding: 20px 24px; }
+
+/* Traceability matrix */
+.trace-section { margin-bottom: 20px; }
+.trace-heading {
+  font-size: 13px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.5px; color: var(--text-muted); margin-bottom: 8px;
+  padding-bottom: 4px; border-bottom: 1px solid var(--border);
+}
+.trace-table {
+  width: 100%; border-collapse: collapse; font-size: 13px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); overflow: hidden;
+}
+.trace-table th {
+  text-align: left; padding: 8px 12px; background: var(--surface-alt);
+  color: var(--text-muted); font-weight: 600; font-size: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.trace-table td { padding: 8px 12px; border-bottom: 1px solid var(--border-light); }
+.trace-table tr:hover td { background: var(--surface-alt); }
+.trace-table a { color: var(--accent); text-decoration: none; }
+.trace-table a:hover { text-decoration: underline; }
+
+/* Screen sections */
+.screen-section {
+  margin-bottom: 12px; border: 1px solid var(--border);
+  border-radius: var(--radius); background: var(--surface);
+  box-shadow: var(--shadow);
+}
+.screen-section > summary {
+  padding: 12px 16px; cursor: pointer; display: flex;
+  align-items: center; gap: 8px; font-size: 15px; font-weight: 500;
+  user-select: none; list-style: none;
+}
+.screen-section > summary::-webkit-details-marker { display: none; }
+.screen-section > summary::before {
+  content: '\\25B6'; font-size: 10px; color: var(--text-muted);
+  transition: transform 0.15s;
+}
+.screen-section[open] > summary::before { transform: rotate(90deg); }
+.screen-section > summary:hover { background: var(--surface-alt); }
+.screen-count { font-size: 12px; color: var(--text-muted); font-weight: 400; margin-left: auto; }
+
+/* Scenario cards */
+.scenario-list { padding: 0 16px 12px; }
+.scenario {
+  border: 1px solid var(--border-light); border-radius: var(--radius);
+  margin-bottom: 8px; overflow: hidden;
+}
+.scenario > summary {
+  padding: 10px 12px; cursor: pointer; display: flex;
+  align-items: center; gap: 8px; font-size: 13px;
+  user-select: none; list-style: none; flex-wrap: wrap;
+}
+.scenario > summary::-webkit-details-marker { display: none; }
+.scenario > summary::before {
+  content: '\\25B6'; font-size: 9px; color: var(--text-light);
+  transition: transform 0.15s;
+}
+.scenario[open] > summary::before { transform: rotate(90deg); }
+.scenario > summary:hover { background: var(--surface-alt); }
+.scenario-name { font-weight: 500; }
+.scenario-ac {
+  font-size: 11px; font-weight: 600; padding: 1px 6px;
+  border-radius: 3px; background: #e0e7ff; color: #3730a3;
+}
+.scenario-duration { color: var(--text-muted); font-size: 12px; margin-left: auto; }
+.scenario-body {
+  padding: 16px; border-top: 1px solid var(--border-light);
+  background: var(--surface-alt);
+}
+
+/* Scenario metadata */
+.scenario-meta {
+  display: grid; grid-template-columns: auto 1fr; gap: 4px 12px;
+  margin-bottom: 12px; padding: 10px 12px;
+  background: var(--surface); border: 1px solid var(--border-light);
+  border-radius: var(--radius);
+}
+.scenario-meta dt {
+  font-size: 11px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.5px; color: var(--text-muted);
+  padding-top: 1px;
+}
+.scenario-meta dd { font-size: 13px; color: var(--text); }
+
+/* Error display */
+.error-block {
+  background: var(--fail-bg); border: 1px solid #fecaca;
+  border-radius: var(--radius); padding: 10px 12px; margin: 10px 0;
+  font-size: 12px; color: var(--fail); white-space: pre-wrap;
+  font-family: 'SF Mono', 'Consolas', 'Monaco', monospace; overflow-x: auto;
+}
+
+/* Steps table */
+.steps-heading {
+  font-size: 12px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.5px; color: var(--text-muted); margin-bottom: 6px;
+}
+.steps-table {
+  width: 100%; border-collapse: collapse; font-size: 12px;
+  background: var(--surface); border: 1px solid var(--border-light);
+  border-radius: var(--radius); overflow: hidden;
+}
+.steps-table th {
+  text-align: left; padding: 6px 10px; background: var(--border-light);
+  color: var(--text-muted); font-weight: 600; font-size: 11px;
+  text-transform: uppercase; letter-spacing: 0.3px;
+}
+.steps-table td {
+  padding: 6px 10px; border-bottom: 1px solid var(--border-light);
+  vertical-align: top;
+}
+.steps-table tr:nth-child(even) td { background: rgba(0,0,0,0.015); }
+.step-num { color: var(--text-light); font-size: 11px; text-align: center; width: 30px; }
+.step-type {
+  font-family: 'SF Mono', 'Consolas', monospace; font-size: 11px;
+  padding: 1px 6px; border-radius: 3px;
+  background: var(--surface-alt); border: 1px solid var(--border);
+  white-space: nowrap;
+}
+.step-type-screenshot { background: #fef3c7; border-color: #fbbf24; color: #92400e; }
+.step-type-assert { background: #dbeafe; border-color: #93c5fd; color: #1e40af; }
+.step-type-action { background: #e0e7ff; border-color: #a5b4fc; color: #3730a3; }
+.step-detail { color: var(--text-muted); max-width: 400px; word-break: break-word; }
+.step-comment { font-size: 11px; color: var(--text-light); font-style: italic; }
+.step-status-pass { color: var(--pass); }
+.step-status-fail { color: var(--fail); }
+.step-status-unknown { color: var(--text-light); }
+
+/* Inline screenshot in steps */
+.step-screenshot {
+  margin: 6px 0 2px; display: inline-block;
+}
+.step-screenshot img {
+  width: 180px; border: 1px solid var(--border);
+  border-radius: var(--radius); cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+.step-screenshot img:hover { transform: scale(1.03); box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+
+/* Status indicators */
+.icon-pass, .icon-fail, .icon-skip { font-size: 14px; line-height: 1; }
+.icon-pass { color: var(--pass); }
+.icon-fail { color: var(--fail); }
+.icon-skip { color: var(--skip); }
+
+/* Bug regression section */
+.section-heading {
+  font-size: 13px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.5px; color: var(--text-muted); margin: 24px 0 8px;
+  padding-bottom: 4px; border-bottom: 1px solid var(--border);
+}
+.bug-table {
+  width: 100%; border-collapse: collapse; font-size: 13px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); overflow: hidden;
+}
+.bug-table th {
+  text-align: left; padding: 8px 12px; background: var(--surface-alt);
+  color: var(--text-muted); font-weight: 600; font-size: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.bug-table td { padding: 8px 12px; border-bottom: 1px solid var(--border-light); }
+
+/* Lightbox */
+.lightbox-overlay {
+  display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.85); z-index: 1000;
+  justify-content: center; align-items: center; cursor: pointer;
+}
+.lightbox-overlay.active { display: flex; }
+.lightbox-overlay img {
+  max-width: 90vw; max-height: 90vh;
+  border-radius: 8px; box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+}
+
+/* Mode label */
+.mode-label {
+  font-size: 11px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 1px; color: var(--text-light); margin-bottom: 12px;
+}
+
+/* Scenario screen badge (shown in AC mode) */
+.scenario-screen {
+  font-size: 10px; font-weight: 500; padding: 1px 5px;
+  border-radius: 3px; background: var(--surface-alt); border: 1px solid var(--border);
+  color: var(--text-muted);
+}
+
+/* See-above reference for multi-AC tests */
+.scenario-ref {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 12px; font-size: 13px;
+  border: 1px dashed var(--border); border-radius: var(--radius);
+  margin-bottom: 6px; background: var(--surface);
+}
+.scenario-ref .scenario-name { font-weight: 500; }
+.see-above {
+  font-size: 12px; color: var(--accent); text-decoration: none;
+  margin-left: auto; font-style: italic;
+}
+.see-above:hover { text-decoration: underline; }
+
+/* Empty state */
+.empty-state { text-align: center; padding: 60px 20px; color: var(--text-muted); }
+.empty-state h2 { font-size: 18px; margin-bottom: 8px; color: var(--text); }
+.empty-state code {
+  display: inline-block; margin-top: 12px; padding: 8px 16px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); font-size: 12px;
+}
+`;
+}
+
+// ---------------------------------------------------------------------------
+// HTML generation
+// ---------------------------------------------------------------------------
+
+function renderScenarioCard(scenario, screenshots, commandFiles, anchorId) {
+  // AC badges (supports multiple)
+  const acBadges = (scenario.acs || [])
+    .map((ac) => `<span class="scenario-ac">${escapeHTML(ac)}</span>`)
+    .join(" ");
+
+  // Screen badge (shown in AC mode so you know which screen)
+  const screenBadge = scenario.screen
+    ? `<span class="scenario-screen">${escapeHTML(formatScreenName(scenario.screen))}</span>` : "";
+
+  // Metadata
+  let metaHTML = "";
+  if (scenario.purpose || scenario.expected || scenario.preconditions) {
+    metaHTML = '<dl class="scenario-meta">';
+    if (scenario.purpose) metaHTML += `<dt>Purpose</dt><dd>${escapeHTML(scenario.purpose)}</dd>`;
+    if (scenario.expected) metaHTML += `<dt>Expected</dt><dd>${escapeHTML(scenario.expected)}</dd>`;
+    if (scenario.preconditions) metaHTML += `<dt>Preconditions</dt><dd>${escapeHTML(scenario.preconditions)}</dd>`;
+    metaHTML += "</dl>";
+  }
+
+  // Error block
+  const errorHTML = (scenario.status === "failed" || scenario.status === "error") && scenario.errorMessage
+    ? `<div class="error-block">${escapeHTML(scenario.errorMessage)}</div>` : "";
+
+  // Build steps — prefer Maestro commands JSON, fall back to YAML-parsed steps
+  const testKey = (scenario.testFileName || "").toLowerCase();
+  const cmdFile = commandFiles[testKey] || "";
+  let steps = [];
+  if (cmdFile && fs.existsSync(cmdFile)) {
+    try {
+      steps = parseCommandsJSON(fs.readFileSync(cmdFile, "utf-8"));
+    } catch { /* skip */ }
+  }
+
+  if (steps.length === 0 && scenario.yamlSteps && scenario.yamlSteps.length > 0) {
+    steps = scenario.yamlSteps.map((s) => ({
+      type: s.type,
+      detail: s.detail || "",
+      screenshotName: s.type === "screenshot" ? s.detail : "",
+      status: "COMPLETED",
+      duration: 0,
+      comment: s.comment || "",
+    }));
+  }
+
+  // Build steps table
+  let stepsHTML = "";
+  if (steps.length > 0) {
+    let stepNum = 0;
+    const stepsRows = steps.map((step) => {
+      stepNum++;
+      const statusClass = step.status === "COMPLETED" ? "step-status-pass"
+        : step.status === "UNKNOWN" ? "step-status-unknown" : "step-status-fail";
+      const statusLabel = step.status === "COMPLETED" ? "&#10003;"
+        : step.status === "UNKNOWN" ? "&#8212;" : "&#10007;";
+      const durationStr = step.duration > 0 ? `${(step.duration / 1000).toFixed(1)}s` : "";
+
+      let inlineScreenshot = "";
+      const ssKey = (step.screenshotName || "").toLowerCase().replace(/\.(png|jpg|jpeg)$/i, "");
+      if (step.type === "screenshot" && ssKey) {
+        const ssFiles = screenshots[ssKey] || [];
+        if (ssFiles.length > 0) {
+          const dataURI = toBase64DataURI(ssFiles[0]);
+          if (dataURI) {
+            inlineScreenshot = `<div class="step-screenshot"><img src="${dataURI}" alt="${escapeHTML(ssKey)}" onclick="openLightbox(this)" /></div>`;
+          }
         }
       }
 
-      acDetailSections += `      </div>\n`;
-    }
+      const commentHTML = step.comment
+        ? `<div class="step-comment">${escapeHTML(step.comment)}</div>` : "";
 
-    // Screenshots for this AC (grid)
-    if (screenshots.length > 0) {
-      acDetailSections += `      <h4 style="margin:16px 0 8px;font-size:13px;color:#9ca3af;text-transform:uppercase;letter-spacing:0.5px;">Screenshot Evidence</h4>\n`;
-      acDetailSections += `      <div class="screenshot-grid">\n`;
-      for (const file of screenshots) {
-        const filePath = path.join(EVIDENCE_DIR, file);
-        const base64 = readImageAsBase64(filePath);
-        const desc = getScreenshotDescription(file);
-        if (base64) {
-          acDetailSections += `        <div class="screenshot-item">
-          <img src="${base64}" alt="${escapeHtml(desc)}" loading="lazy" onclick="openLightbox(this.src, '${escapeHtml(desc).replace(/'/g, "\\'")}')">
-          <div class="caption">${escapeHtml(desc)}</div>
-        </div>\n`;
-        }
+      return `<tr>
+        <td class="step-num">${stepNum}</td>
+        <td><span class="${statusClass}">${statusLabel}</span></td>
+        <td><span class="${stepTypeClass(step.type)}">${escapeHTML(stepTypeLabel(step.type))}</span></td>
+        <td class="step-detail">
+          ${escapeHTML(step.detail)}
+          ${commentHTML}
+          ${inlineScreenshot}
+        </td>
+        <td>${durationStr}</td>
+      </tr>`;
+    }).join("\n");
+
+    stepsHTML = `
+      <div class="steps-heading">Execution Steps (${steps.length})</div>
+      <table class="steps-table">
+        <thead><tr><th>#</th><th></th><th>Action</th><th>Detail</th><th>Time</th></tr></thead>
+        <tbody>${stepsRows}</tbody>
+      </table>`;
+  }
+
+  return `
+    <details class="scenario" id="${anchorId}">
+      <summary>
+        ${statusIcon(scenario.status)}
+        <span class="scenario-name">${escapeHTML(scenario.name)}</span>
+        ${acBadges}
+        ${screenBadge}
+        <span class="scenario-duration">${scenario.time ? formatDuration(scenario.time) : ""}</span>
+      </summary>
+      <div class="scenario-body">
+        ${metaHTML}
+        ${errorHTML}
+        ${stepsHTML}
+      </div>
+    </details>`;
+}
+
+function generateHTML(screenData, screenshots, commandFiles, opts) {
+  const isACMode = opts.mode === "ac";
+
+  // Flatten all scenarios
+  const allScenarios = [];
+  for (const [screenName, scenarios] of Object.entries(screenData)) {
+    for (const s of scenarios) allScenarios.push(s);
+  }
+
+  // In AC mode, filter to only tests with AC tags
+  const activeScenarios = isACMode
+    ? allScenarios.filter((s) => s.acs && s.acs.length > 0)
+    : allScenarios;
+
+  // Compute totals
+  let totalTests = 0, totalPass = 0, totalFail = 0, totalSkip = 0, totalTime = 0;
+  const devices = new Set();
+  // Use a Set to avoid double-counting tests that map to multiple ACs
+  const countedTests = new Set();
+  for (const s of activeScenarios) {
+    const key = `${s.screen}-${s.testFileName}`;
+    if (!countedTests.has(key)) {
+      countedTests.add(key);
+      totalTests++;
+      totalTime += s.time;
+      if (s.device) devices.add(s.device);
+      if (s.status === "passed") totalPass++;
+      else if (s.status === "failed" || s.status === "error") totalFail++;
+      else totalSkip++;
+    }
+  }
+
+  // Logo
+  let logoHTML = "";
+  if (opts.logo && fs.existsSync(opts.logo)) {
+    logoHTML = `<img class="logo" src="${toBase64DataURI(opts.logo)}" alt="Logo" />`;
+  }
+  const companyHTML = opts.companyName
+    ? `<span class="company">${escapeHTML(opts.companyName)}</span>` : "";
+
+  // Build main content based on mode
+  let mainContent = "";
+  const modeLabel = isACMode ? "Acceptance Criteria" : "Regression — By Screen";
+
+  if (isACMode) {
+    // Group by AC — each AC is a section
+    const acMap = {}; // { acId: [scenario] }
+    const renderedAnchors = new Set(); // track which tests already rendered full card
+
+    for (const s of activeScenarios) {
+      for (const ac of s.acs) {
+        if (!acMap[ac]) acMap[ac] = [];
+        acMap[ac].push(s);
       }
-      acDetailSections += `      </div>\n`;
     }
 
-    acDetailSections += `    </div>\n  </details>\n</div>\n`;
+    // Sort ACs
+    const sortedACs = Object.keys(acMap).sort((a, b) =>
+      a.localeCompare(b, undefined, { numeric: true })
+    );
+
+    mainContent = sortedACs.map((acId) => {
+      const scenarios = acMap[acId];
+      const pass = scenarios.filter((s) => s.status === "passed").length;
+      const fail = scenarios.filter((s) => s.status === "failed" || s.status === "error").length;
+      const sectionIcon = fail > 0
+        ? '<span class="icon-fail">&#10007;</span>'
+        : '<span class="icon-pass">&#10003;</span>';
+
+      const cards = scenarios.map((scenario) => {
+        const anchorId = `scenario-${scenario.screen}-${scenario.testFileName || scenario.name}`.replace(/[^a-z0-9-]/gi, "-");
+
+        // If this test was already rendered under a previous AC, show a "see above" link
+        if (renderedAnchors.has(anchorId)) {
+          return `
+            <div class="scenario-ref">
+              ${statusIcon(scenario.status)}
+              <span class="scenario-name">${escapeHTML(scenario.name)}</span>
+              <a href="#${anchorId}" class="see-above">See test above under ${escapeHTML(scenario.acs.find((a) => a !== acId) || scenario.acs[0])}</a>
+            </div>`;
+        }
+
+        renderedAnchors.add(anchorId);
+        return renderScenarioCard(scenario, screenshots, commandFiles, anchorId);
+      }).join("\n");
+
+      return `
+        <details class="screen-section" open>
+          <summary>
+            ${sectionIcon}
+            <strong>${escapeHTML(acId)}</strong>
+            <span class="screen-count">${pass}/${scenarios.length} passed</span>
+          </summary>
+          <div class="scenario-list">
+            ${cards}
+          </div>
+        </details>`;
+    }).join("\n");
+
+  } else {
+    // Regression mode — group by screen
+    mainContent = Object.entries(screenData).map(([screenName, scenarios]) => {
+      const pass = scenarios.filter((s) => s.status === "passed").length;
+      const fail = scenarios.filter((s) => s.status === "failed" || s.status === "error").length;
+      const screenIcon = fail > 0
+        ? '<span class="icon-fail">&#10007;</span>'
+        : '<span class="icon-pass">&#10003;</span>';
+
+      const cards = scenarios.map((scenario) => {
+        const anchorId = `scenario-${screenName}-${scenario.testFileName || scenario.name}`.replace(/[^a-z0-9-]/gi, "-");
+        return renderScenarioCard(scenario, screenshots, commandFiles, anchorId);
+      }).join("\n");
+
+      return `
+        <details class="screen-section" open>
+          <summary>
+            ${screenIcon}
+            <strong>${escapeHTML(formatScreenName(screenName))}</strong>
+            <span class="screen-count">${pass}/${scenarios.length} passed</span>
+          </summary>
+          <div class="scenario-list">
+            ${cards}
+          </div>
+        </details>`;
+    }).join("\n");
   }
 
-  // --- Coverage Gaps ---
-  let gaps = '';
-  let hasGaps = false;
-  for (const [ac, desc] of Object.entries(AC_DEFINITIONS)) {
-    const tests = acGroups[ac] || [];
-    const min = AC_MINIMUMS[ac] || 1;
-    if (tests.length < min) {
-      hasGaps = true;
-      gaps += `<div class="gap-warning">
-        <strong>${ac}: ${escapeHtml(desc)}</strong> — ${tests.length} tests found, minimum required: ${min}
-      </div>\n`;
+  // Bug regressions
+  let bugSection = "";
+  const bugTests = activeScenarios.filter(
+    (s) => /BUG-\d+/i.test(s.name) || s.acs.some((ac) => /BUG-\d+/i.test(ac))
+  );
+  if (bugTests.length > 0) {
+    const bugRows = bugTests.map((bt) => {
+      const bugMatch = bt.name.match(/BUG-\d+/i) || bt.acs.join(",").match(/BUG-\d+/i);
+      const bugId = bugMatch ? bugMatch[0] : "unknown";
+      return `<tr>
+        <td><strong>${escapeHTML(bugId)}</strong></td>
+        <td>${escapeHTML(bt.name)}</td>
+        <td>${escapeHTML(bt.screen || "")}</td>
+        <td>${statusIcon(bt.status)} ${bt.status.toUpperCase()}</td>
+      </tr>`;
+    }).join("\n");
+
+    bugSection = `
+      <div class="section-heading">Bug Regressions</div>
+      <table class="bug-table">
+        <thead><tr><th>Bug ID</th><th>Test</th><th>Screen</th><th>Status</th></tr></thead>
+        <tbody>${bugRows}</tbody>
+      </table>`;
+  }
+
+  const deviceStr = devices.size > 0 ? Array.from(devices).join(", ") : "default";
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>${escapeHTML(opts.title)}</title>
+<style>${getCSS()}</style>
+</head>
+<body>
+
+<div class="report-header">
+  <div class="title-area">
+    ${logoHTML}
+    <div>
+      <h1>${escapeHTML(opts.title)}</h1>
+      ${companyHTML}
+    </div>
+  </div>
+  <div class="summary-bar">
+    <div class="stat"><span class="stat-value">${totalTests}</span> tests</div>
+    <span class="badge badge-pass">&#10003; ${totalPass} passed</span>
+    ${totalFail > 0 ? `<span class="badge badge-fail">&#10007; ${totalFail} failed</span>` : ""}
+    ${totalSkip > 0 ? `<span class="badge badge-skip">&#9679; ${totalSkip} skipped</span>` : ""}
+    <div class="stat">${formatDuration(totalTime)}</div>
+  </div>
+</div>
+
+<div class="meta-bar">
+  <span>Generated: ${new Date().toLocaleString()}</span>
+  <span>Device: ${escapeHTML(deviceStr)}</span>
+  <span>Tests: ${totalTests}</span>
+</div>
+
+<div class="content">
+  <div class="mode-label">${escapeHTML(modeLabel)}</div>
+  ${mainContent}
+  ${bugSection}
+</div>
+
+<div class="lightbox-overlay" id="lightbox" onclick="closeLightbox()">
+  <img id="lightbox-img" src="" alt="Screenshot" />
+</div>
+
+<script>
+function openLightbox(el) {
+  var lb = document.getElementById('lightbox');
+  document.getElementById('lightbox-img').src = el.src;
+  lb.classList.add('active');
+}
+function closeLightbox() {
+  document.getElementById('lightbox').classList.remove('active');
+}
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') closeLightbox();
+});
+</script>
+
+</body>
+</html>`;
+}
+
+function generateEmptyHTML(opts) {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>${escapeHTML(opts.title)}</title>
+<style>${getCSS()}</style>
+</head>
+<body>
+<div class="report-header">
+  <div class="title-area"><h1>${escapeHTML(opts.title)}</h1></div>
+  <div class="summary-bar"><span class="badge badge-skip">No results</span></div>
+</div>
+<div class="content">
+  <div class="empty-state">
+    <h2>No test results found</h2>
+    <p>Run E2E tests first, then re-generate this report.</p>
+    <code>maestro test __tests__/e2e/screens/ --format junit --output test-reports/e2e-results/</code>
+  </div>
+</div>
+</body>
+</html>`;
+}
+
+// ---------------------------------------------------------------------------
+// Main — assembles all data into unified screen → scenario structure
+// ---------------------------------------------------------------------------
+
+function main() {
+  const opts = parseArgs();
+  const inputDir = path.resolve(opts.input);
+  const outputFile = path.resolve(opts.output);
+  const testsDir = path.resolve(opts.tests);
+
+  // Find result files (XML, JSON, TRX)
+  const xmlFiles = [];
+  const jsonFiles = [];
+  const trxFiles = [];
+  if (fs.existsSync(inputDir)) {
+    const walk = (d) => {
+      for (const entry of fs.readdirSync(d, { withFileTypes: true })) {
+        const full = path.join(d, entry.name);
+        if (entry.isDirectory()) walk(full);
+        else if (/\.xml$/i.test(entry.name)) xmlFiles.push(full);
+        else if (/\.json$/i.test(entry.name) && !entry.name.startsWith('commands-')) jsonFiles.push(full);
+        else if (/\.trx$/i.test(entry.name)) trxFiles.push(full);
+      }
+    };
+    walk(inputDir);
+  }
+
+  // Also check for single result files at common paths
+  const singleResultCandidates = [
+    path.join(process.cwd(), 'test-results.json'),
+    path.join(process.cwd(), 'tests', 'report', 'test-results.json'),
+  ];
+  for (const candidate of singleResultCandidates) {
+    if (fs.existsSync(candidate) && !jsonFiles.includes(candidate)) {
+      const content = fs.readFileSync(candidate, 'utf-8').trim();
+      if (content.startsWith('{') && content.includes('"suites"')) {
+        jsonFiles.push(candidate);
+      }
     }
   }
-  if (!hasGaps) {
-    gaps = '<p class="gap-ok">All acceptance criteria meet or exceed minimum test coverage requirements.</p>';
+
+  const hasResults = xmlFiles.length > 0 || jsonFiles.length > 0 || trxFiles.length > 0;
+
+  if (!hasResults) {
+    console.log("No result files found in", inputDir);
+    fs.mkdirSync(path.dirname(outputFile), { recursive: true });
+    fs.writeFileSync(outputFile, generateEmptyHTML(opts));
+    console.log("Empty report written to", outputFile);
+    return;
   }
 
-  // --- Review Summary (auto-generated) ---
-  const acsCovered = Object.keys(acGroups).filter(ac => acGroups[ac].length > 0).length;
-  const totalACs = Object.keys(AC_DEFINITIONS).length;
-  const reviewSummary = `
-    <table class="review-table">
-      <thead>
-        <tr><th>Criterion</th><th>Status</th><th>Notes</th></tr>
-      </thead>
-      <tbody>
-        <tr><td>AC naming convention</td><td>${totalTests > 0 ? '<span class="pass-badge">PASS</span>' : '<span class="skip-badge">N/A</span>'}</td><td>${totalTests} tests scanned</td></tr>
-        <tr><td>ACs covered</td><td>${acsCovered === totalACs ? '<span class="pass-badge">PASS</span>' : '<span class="fail-badge">GAPS</span>'}</td><td>${acsCovered}/${totalACs} acceptance criteria have tests</td></tr>
-        <tr><td>Minimum coverage met</td><td>${!hasGaps ? '<span class="pass-badge">PASS</span>' : '<span class="fail-badge">GAPS</span>'}</td><td>${!hasGaps ? 'All ACs meet minimum test count' : 'Some ACs below minimum'}</td></tr>
-      </tbody>
-    </table>
-    <p style="margin-top:16px;"><strong>Summary:</strong> ${passed}/${totalTests} tests passed across ${acsCovered} acceptance criteria.</p>
-  `;
+  // Parse result files and group by screen
+  const xmlByScreen = {}; // { screen: [{ testKey, tc, device }] }
 
-  // --- Populate Template ---
-  const timestamp = new Date().toISOString().replace('T', ' ').split('.')[0] + ' UTC';
-  const durationStr = formatDuration(totalDuration);
+  // Parse JUnit XML files (Maestro, pytest, Java)
+  for (const xmlFile of xmlFiles) {
+    const xml = fs.readFileSync(xmlFile, "utf-8");
+    const format = detectResultFormat(xml, xmlFile, opts.format);
+    if (format === 'trx') {
+      // TRX file with .xml extension
+      const trxTests = parseTRXContent(xml);
+      for (const tc of trxTests) {
+        const screen = 'default';
+        if (!xmlByScreen[screen]) xmlByScreen[screen] = [];
+        xmlByScreen[screen].push({ testKey: tc.name, name: tc.name, classname: '', time: tc.time, status: tc.status, errorMessage: tc.error, device: '' });
+      }
+      continue;
+    }
+    const suites = parseJUnitXML(xml);
+    const { screen, testKey } = parseXMLFileName(xmlFile);
 
-  let html = template;
-  html = html.replace(/\{\{PROJECT_NAME\}\}/g, escapeHtml(projectName));
-  html = html.replace(/\{\{TIMESTAMP\}\}/g, timestamp);
-  html = html.replace(/\{\{DURATION\}\}/g, durationStr);
-  html = html.replace(/\{\{TOTAL\}\}/g, String(totalTests));
-  html = html.replace(/\{\{PASSED\}\}/g, String(passed));
-  html = html.replace(/\{\{FAILED\}\}/g, String(failed));
-  html = html.replace('<!-- {{AC_ROWS}} -->', acRows);
-  html = html.replace('<!-- {{AC_DETAIL_SECTIONS}} -->', acDetailSections);
-  html = html.replace('<!-- {{SECURITY_ROWS}} -->', '');
-  html = html.replace('<!-- {{GAPS}} -->', gaps);
-  html = html.replace('<!-- {{REVIEW_SUMMARY}} -->', reviewSummary);
+    if (!xmlByScreen[screen]) xmlByScreen[screen] = [];
 
-  // Inject adversarial review findings
-  const reviewerHtml = generateReviewerHtml(reviewerFindings);
-  html = html.replace('<!-- {{REVIEWER_FINDINGS}} -->', reviewerHtml);
-
-  fs.mkdirSync(path.dirname(OUTPUT_PATH), { recursive: true });
-  fs.writeFileSync(OUTPUT_PATH, html, 'utf8');
-
-  console.log(`Evidence report generated: ${OUTPUT_PATH}`);
-  console.log(`  Format: ${format}`);
-  console.log(`  Total: ${totalTests} | Passed: ${passed} | Failed: ${failed} | Duration: ${durationStr}`);
-  console.log(`  Screenshots embedded: ${evidenceFiles.length}`);
-  console.log(`  ACs covered: ${acsCovered}/${totalACs}`);
-  const doneCount = Object.values(AC_STATUSES).filter(s => s === 'DONE').length;
-  const activeCount = Object.values(AC_STATUSES).filter(s => s === 'ACTIVE').length;
-  const openCount = totalACs - doneCount - activeCount;
-  if (doneCount > 0 || activeCount > 0) {
-    console.log(`  Work status: ${openCount} open, ${activeCount} active, ${doneCount} done`);
+    for (const suite of suites) {
+      for (const tc of suite.testCases) {
+        xmlByScreen[screen].push({
+          testKey,
+          name: tc.name,
+          classname: tc.classname,
+          time: tc.time,
+          status: tc.status,
+          errorMessage: tc.errorMessage,
+          device: suite.device,
+        });
+      }
+    }
   }
+
+  // Parse Playwright JSON files
+  for (const jsonFile of jsonFiles) {
+    const content = fs.readFileSync(jsonFile, 'utf-8');
+    const format = detectResultFormat(content, jsonFile, opts.format);
+    if (format === 'playwright-json') {
+      const pwTests = parsePlaywrightJSON(content);
+      for (const tc of pwTests) {
+        const screen = tc.file ? path.basename(tc.file, path.extname(tc.file)).replace(/\.spec|\.test/g, '') : 'default';
+        if (!xmlByScreen[screen]) xmlByScreen[screen] = [];
+        xmlByScreen[screen].push({ testKey: tc.name, name: tc.name, classname: tc.file, time: tc.time, status: tc.status, errorMessage: tc.error, device: '' });
+      }
+    }
+  }
+
+  // Parse TRX files (.NET)
+  for (const trxFile of trxFiles) {
+    const content = fs.readFileSync(trxFile, 'utf-8');
+    const trxTests = parseTRXContent(content);
+    for (const tc of trxTests) {
+      const screen = 'default';
+      if (!xmlByScreen[screen]) xmlByScreen[screen] = [];
+      xmlByScreen[screen].push({ testKey: tc.name, name: tc.name, classname: '', time: tc.time, status: tc.status, errorMessage: tc.error, device: '' });
+    }
+  }
+
+  // Find screenshots from multiple locations
+  const screenshotDirs = [];
+  if (opts.screenshots) {
+    screenshotDirs.push(path.resolve(opts.screenshots));
+  }
+  screenshotDirs.push(path.join(inputDir, "screenshots"));
+  screenshotDirs.push(path.join(path.dirname(inputDir), "screenshots"));
+  screenshotDirs.push(inputDir); // PNGs directly in results dir
+  const allScreenshots = findScreenshots(...screenshotDirs);
+
+  // Load YAML metadata
+  const testMeta = loadTestMetadata(testsDir);
+
+  // Find Maestro commands
+  const commandFiles = findMaestroCommands(inputDir);
+
+  // Assemble unified screen data: merge YAML metadata with JUnit results
+  const screenData = {}; // { screen: [scenario] }
+
+  // First, populate from YAML metadata (primary source)
+  for (const [screenName, scenarios] of Object.entries(testMeta)) {
+    screenData[screenName] = scenarios.map((scenario) => {
+      // Find matching JUnit result
+      const xmlTests = xmlByScreen[screenName] || [];
+      const matched = xmlTests.find(
+        (t) => t.testKey === scenario.fileName || t.name === scenario.fileName
+      );
+
+      return {
+        name: scenario.name,
+        acs: scenario.acs || [],
+        screen: screenName,
+        purpose: scenario.purpose,
+        expected: scenario.expected,
+        preconditions: scenario.preconditions,
+        testFileName: scenario.fileName,
+        yamlSteps: scenario.steps,
+        yamlScreenshots: scenario.screenshots,
+        status: matched ? matched.status : "skipped",
+        time: matched ? matched.time : 0,
+        errorMessage: matched ? matched.errorMessage : "",
+        device: matched ? matched.device : "",
+      };
+    });
+  }
+
+  // Second, add any XML results that don't have YAML metadata (orphans)
+  for (const [screenName, xmlTests] of Object.entries(xmlByScreen)) {
+    if (!screenData[screenName]) screenData[screenName] = [];
+
+    for (const xt of xmlTests) {
+      const alreadyMatched = screenData[screenName].some(
+        (s) => s.testFileName === xt.testKey
+      );
+      if (!alreadyMatched) {
+        screenData[screenName].push({
+          name: xt.testKey.replace(/^\d+-/, "").replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
+          acs: [],
+          screen: screenName,
+          purpose: "",
+          expected: "",
+          preconditions: "",
+          testFileName: xt.testKey,
+          yamlSteps: [],
+          yamlScreenshots: [],
+          status: xt.status,
+          time: xt.time,
+          errorMessage: xt.errorMessage,
+          device: xt.device,
+        });
+      }
+    }
+  }
+
+  // Sort screens alphabetically, scenarios by filename
+  const sortedScreenData = {};
+  for (const key of Object.keys(screenData).sort()) {
+    sortedScreenData[key] = screenData[key].sort((a, b) =>
+      (a.testFileName || "").localeCompare(b.testFileName || "", undefined, { numeric: true })
+    );
+  }
+
+  // Load adversarial review findings
+  const reviewerPath = opts.reviewer
+    ? path.resolve(opts.reviewer)
+    : path.join(process.cwd(), 'docs', 'adversarial-review.md');
+  const reviewerFindings = parseAdversarialReview(
+    opts.reviewer ? reviewerPath : (fs.existsSync(reviewerPath) ? reviewerPath : null)
+  );
+
+  // Generate HTML
+  let html = generateHTML(sortedScreenData, allScreenshots, commandFiles, opts);
+
+  // Inject adversarial review findings before closing </body>
+  if (reviewerFindings) {
+    const reviewHtml = generateAdversarialReviewHtml(reviewerFindings);
+    html = html.replace('</div>\n</body>', reviewHtml + '</div>\n</body>');
+  }
+
+  fs.mkdirSync(path.dirname(outputFile), { recursive: true });
+  fs.writeFileSync(outputFile, html);
+
+  // Summary
+  console.log(`Report generated: ${outputFile}`);
+  console.log(`  ${totalCount(sortedScreenData)} tests across ${Object.keys(sortedScreenData).length} screens`);
+  console.log(`  Screenshots found: ${Object.keys(allScreenshots).length}`);
+  console.log(`  Command files found: ${Object.keys(commandFiles).length}`);
   if (reviewerFindings) {
     console.log(`  Adversarial Review: ${reviewerFindings.summary.pass} PASS, ${reviewerFindings.summary.fail} FAIL, ${reviewerFindings.summary.warn} WARN`);
   }
+
+  const failCount = Object.values(sortedScreenData).flat().filter((s) => s.status === "failed" || s.status === "error").length;
+  if (failCount > 0) {
+    console.log(`  FAILURES: ${failCount}`);
+    process.exit(1);
+  }
+}
+
+function totalCount(screenData) {
+  return Object.values(screenData).reduce((sum, arr) => sum + arr.length, 0);
 }
 
 main();

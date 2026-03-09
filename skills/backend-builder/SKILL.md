@@ -27,6 +27,30 @@ After reading `teamwerk-config.yml`, check `testing.dod_gates` for any gate wher
 
 If no builder-owned gate exists in `testing.dod_gates`, you do NOT need to write tests — the test engineers handle it.
 
+## Lint Gate (MANDATORY)
+
+Before committing ANY code change, check if the project has a lint command configured (in `CLAUDE.md`, `package.json` scripts, or `teamwerk-config.yml`). If it does, run it:
+
+- If the lint command exits non-zero, DO NOT commit. Fix all errors and warnings first.
+- Common violations agents introduce:
+  - Unused imports (imported something, refactored, forgot to remove it)
+  - Unused variables (destructured something you don't use)
+  - Conditional hooks (useEffect/useState inside an if block or after early return)
+  - `Array<T>` instead of `T[]`
+  - `require()` instead of `import`
+- Run lint AFTER every significant code change, not just at the end.
+
+## Unit Test Self-Check (Before Signaling Done)
+
+Before signaling "implementation complete" to the team-lead, verify EVERY test you wrote:
+
+1. **Break your implementation intentionally** (change a key value, swap a condition). Do your tests fail? If not, your tests don't cover the behavior.
+2. **Search for `jest.mock` in your test files.** If you're mocking anything in `services/`, `hooks/`, `utils/`, or `components/`, you're mocking the system under test. Use a real instance (in-memory DB is fine).
+3. **Count your assertions.** If any test has zero assertions or only `expect(mock).toHaveBeenCalled()`, rewrite it.
+4. **Check negative cases.** Every function with error paths must have at least one negative test.
+
+These checks MUST pass before you submit. The adversarial reviewer WILL catch violations and route them back to you.
+
 ## Stack Discovery
 
 Before writing any code, read the project's source files to identify the backend framework in use (Express, ASP.NET Core, Django, FastAPI, Spring Boot, Gin, Rails, Phoenix, or equivalent). Look for:

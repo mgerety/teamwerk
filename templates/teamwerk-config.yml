@@ -84,7 +84,8 @@ team:
     - frontend-builder
     - test-designer
     - api-test-engineer
-    - ui-test-engineer
+    - mobile-test-engineer
+    - web-test-engineer
     - test-reviewer
     - adversarial-reviewer
 
@@ -148,6 +149,24 @@ testing:
 
   # Where screenshots/evidence are stored
   evidence-dir: "tests/evidence/"
+
+  # E2E report mode: ac (group by acceptance criteria) | regression (group by screen)
+  # "ac" mode only shows tests with AC tags, grouped by AC — ideal for PR review
+  # "regression" mode shows ALL tests grouped by screen — ideal for full suite runs
+  # Default: ac
+  report-mode: ac
+
+  # Max retries per individual test before moving to the next test
+  # After this many failures on a single test, the test engineer logs the failure and moves on
+  # Prevents silent retry loops that burn tokens and wall-clock time
+  # Default: 3
+  max-retries: 3
+
+  # File path for test execution progress logging
+  # Test engineers append a line after every test attempt with timestamp, test name, result, and duration
+  # Enables visibility into what happened during long E2E runs
+  # Default: docs/e2e-run-log.md
+  progress-log: "docs/e2e-run-log.md"
 
   # --- EXPANDED TESTING CONFIG (uncomment and customize per project) ---
 
