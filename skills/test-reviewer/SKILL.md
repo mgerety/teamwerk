@@ -81,6 +81,19 @@ Do E2E tests take screenshots? Are those screenshots actually verified (assertio
 
 **How to check**: For every screenshot capture call, there must be at least one assertion before or after it that validates the visible state.
 
+### 6b. Visual Evidence Inspection (MANDATORY for non-DOM frameworks)
+
+For projects using Maestro, Detox, or other frameworks without DOM access (check `testing.e2e.framework` in `teamwerk-config.yml`):
+
+1. **READ each screenshot image file** referenced in E2E tests. Use the Read tool or image-analyzer agent — do NOT skip this step.
+2. For each screenshot, compare what you SEE against the test's PURPOSE and EXPECTED claims.
+3. **REJECT any test where**:
+   - The screenshot contradicts a visual claim in PURPOSE/EXPECTED (e.g., PURPOSE says "full-width button" but screenshot shows margins)
+   - The test claims PASS on a visual property that the framework cannot check programmatically AND the screenshot was not inspected
+   - PURPOSE contains visual claims (colors, sizes, layout) but the test only has text assertions with no screenshot verification
+   - An assertion was deleted because it failed (this hides bugs — the test should FAIL, not be weakened)
+4. A test that says PASS while its screenshot proves FAIL is worse than no test — it's false confidence that hides real bugs. Reject it and report the underlying implementation defect to the Team Lead.
+
 ### 7. Adversarial Coverage
 For security-related ACs (input validation, injection prevention), are there REAL adversarial tests? Not just "send wrong type" but actual injection payloads, actual XSS payloads?
 
