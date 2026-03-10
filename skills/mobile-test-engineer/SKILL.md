@@ -316,6 +316,25 @@ After ALL Maestro tests complete and screenshots are collected:
 
 4. DO NOT mark a test as PASS if you only verified text existence. Text assertions (assertVisible) verify CONTENT. Screenshot verification verifies APPEARANCE. Both must pass.
 
+### 7. Limited-Capability Framework Fallback (Maestro, Detox, etc.)
+
+When the E2E framework cannot read computed styles or DOM properties (which is ALWAYS the case for Maestro and Detox):
+
+1. **Write assertions for what the framework CAN verify** — text content, element visibility, tap responses, navigation outcomes.
+2. **After EVERY `takeScreenshot` command, READ the screenshot image file** using the Read tool or image-analyzer agent. This is NOT optional — it is the ONLY way to verify visual properties in these frameworks.
+3. **Visually verify EACH claim in the test's PURPOSE/EXPECTED against what the screenshot shows:**
+   - If PURPOSE says "full-width button" — verify the button spans the screen width in the image
+   - If PURPOSE says "blue #396999" — verify the color appears correct in the image
+   - If PURPOSE says "icon visible" — verify the icon appears in the image
+   - If PURPOSE says specific layout — verify the layout in the image
+4. **If the screenshot contradicts ANY visual claim, FAIL the test immediately.** Report it as an implementation defect to the Team Lead. Do NOT:
+   - Remove the claim from PURPOSE
+   - Remove the failing assertion
+   - Claim "screenshot serves as visual evidence" without actually reading and verifying it
+   - Delete an assertion because it fails — that hides bugs
+5. **Do NOT write PURPOSE/EXPECTED claims you cannot verify.** If you can't check it programmatically AND you won't read the screenshot to verify it, don't claim you verified it.
+6. **Icons rendered as framework components (MaterialIcons, SF Symbols, etc.) cannot be asserted as text.** You MUST read the screenshot to verify icon presence. Document in the test: `# Note: Icon verified via screenshot inspection, not text assertion.`
+
 ### Expected Field Requirements
 
 The `# Expected:` field must be written with visual verification in mind. Vague expectations produce vague verification:
