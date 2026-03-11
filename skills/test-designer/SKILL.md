@@ -51,6 +51,9 @@ Session Strategy: [from teamwerk-config.yml]
 | AC1-T2 | API | [specific test description] | shared | must-have |
 | AC1-T3 | E2E | [specific test description] | shared | must-have |
 | AC1-T4 | E2E | [specific test description] | shared | nice-to-have |
+| AC3-T4 | E2E-VISUAL | Verify REVIEW DAY button is full-width (#396999, 56px height) | shared | must-have |
+
+Note: `E2E-VISUAL` tests require screenshot verification. The test engineer must take a screenshot and visually verify the claim — programmatic assertion alone is not sufficient for visual properties in non-DOM frameworks.
 
 ### Stub Boundary
 - MUST IMPLEMENT: [features that must work for this AC to pass]
@@ -89,11 +92,16 @@ Session Strategy: [from teamwerk-config.yml]
    - At least one error-path test (invalid input → correct error)
    - For security ACs: adversarial input tests (injection, XSS, overflow)
    - For UI ACs: both API contract tests AND E2E visual tests
-4. **Define the stub boundary:**
+4. **Flag visual requirements:**
+   - Read the AC for any visual claims (colors, dimensions, layout, icons, typography)
+   - For each visual claim, add a row to the test spec with `Type: E2E-VISUAL`
+   - The test spec must include the EXACT values from the AC (hex code, dimension, etc.) — do NOT paraphrase
+   - If the AC's visual requirement is vague (no hex code, no dimension), flag it: "BLOCKED: AC-X visual requirement is ambiguous — needs clarification from Team Lead before test can be designed"
+5. **Define the stub boundary:**
    - MUST IMPLEMENT: features the AC explicitly requires
    - MAY STUB: features mentioned in the AC as deferred, future, or out of scope
    - If a feature is NOT mentioned in the AC, it defaults to MUST IMPLEMENT
-5. **Set the session strategy:**
+6. **Set the session strategy:**
    - If the AC group requires login: use `shared-session` (one login, shared state)
    - If tests must be isolated (e.g., testing different user roles): use `per-test`
    - If no auth needed: use `none`
