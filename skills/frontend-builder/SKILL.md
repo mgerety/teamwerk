@@ -51,6 +51,23 @@ Before signaling "implementation complete" to the team-lead, verify EVERY test y
 
 These checks MUST pass before you submit. The adversarial reviewer WILL catch violations and route them back to you.
 
+## Visual Self-Check (Before Signaling Done)
+
+When you finish implementing an AC with visual requirements (colors, layout, sizing, icons, typography):
+
+1. **Read the AC's visual requirements.** Extract every specific visual claim — hex colors, dimensions, layout relationships, icon presence.
+2. **Read the design doc** if the AC has a `Design Reference:` field.
+3. **Take a screenshot** of the implemented feature in the running app (use the appropriate mechanism for the project — Maestro `takeScreenshot`, Playwright `page.screenshot()`, emulator screenshot, `adb exec-out screencap`, etc.)
+4. **Read the screenshot** using your multimodal vision capabilities (Read tool on the PNG file).
+5. **Compare each visual requirement against what you see:**
+   - Does the color match the hex code in the AC?
+   - Does the sizing match the spec (full-width, specific dimensions)?
+   - Are icons present and correctly positioned?
+   - Does the layout match the specified relationships?
+6. **If anything doesn't match, fix it before signaling complete.** Do not signal "done" with known visual issues.
+7. **Delete the screenshot after verification.** These are transient — the QA Tester and E2E tests will take their own screenshots later. No stale screenshots.
+8. **Include in your completion message:** "Visual self-check: verified [list of visual requirements checked] against screenshot. All match." If you couldn't take a screenshot (no emulator running, etc.), say so explicitly.
+
 ## Stack Discovery
 
 Before writing any code, read the project's source files to identify the frontend framework in use (React, Angular, Vue, Svelte, Blazor, vanilla HTML/JS, or equivalent). Look for:
