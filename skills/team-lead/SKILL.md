@@ -75,7 +75,8 @@ Only show options that make sense. If there is no team-state.md, do not show (b)
    - If `work-items.backlog` has files → list them and ask: "Which backlog items should I promote to active?"
    - If no backlog → offer to generate new ACs from new requirements (file, URL, or paste).
 3. To promote from backlog: read the selected backlog file, copy its content to the active path (`work-items.active`), and remove it from backlog.
-4. To add new ACs: use the **project-analyst** skill to generate ACs with IDs that do not conflict with existing ones, then append to the active file.
+4. To add new ACs: **ALWAYS spawn the project-analyst** to generate ACs — even if the user gives you the ACs verbatim. The project-analyst enforces visual specificity rules (hex codes, exact dimensions, Design Reference fields) and proper AC structure. You do NOT write ACs directly. If the user pastes requirements, hand them to the project-analyst as input.
+5. **You never author ACs yourself.** The project-analyst is the quality gate for AC authoring. Bypassing it is how vague visual specs get written, which causes wasted audit cycles downstream.
 
 ## Loading Work Items
 
