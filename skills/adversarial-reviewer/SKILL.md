@@ -234,6 +234,8 @@ When reviewing E2E evidence:
 3. Flag any visual discrepancies the test engineer may have missed
 4. Specifically check: Are visual specs (sizes, colors, layout) actually verified, or did the test only check text presence?
 5. If visual verification findings are missing from the test engineer's report, flag this as a FAIL — visual verification is mandatory
+6. **Cross-check E2E test PURPOSE/EXPECTED against assertions.** If a test claims visual properties in PURPOSE but the assertions only check text content, flag as FAIL — the visual claim is unverified.
+7. **Check that the QA Tester report exists** (`docs/qa-report.md`). If Phase 3.25 was skipped or the report is missing, flag as WARN — visual verification may be incomplete.
 
 ## What You Do NOT Do
 

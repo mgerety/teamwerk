@@ -94,6 +94,20 @@ For projects using Maestro, Detox, or other frameworks without DOM access (check
    - An assertion was deleted because it failed (this hides bugs — the test should FAIL, not be weakened)
 4. A test that says PASS while its screenshot proves FAIL is worse than no test — it's false confidence that hides real bugs. Reject it and report the underlying implementation defect to the Team Lead.
 
+### 6c. Visual Claim Cross-Check (ALL frameworks)
+
+For every E2E test, compare the PURPOSE/EXPECTED fields against the assertions in the test:
+
+1. Extract every visual claim from PURPOSE and EXPECTED (colors, dimensions, layout, icons, typography).
+2. For each visual claim, verify that the test has EITHER:
+   - A programmatic assertion that checks the property (e.g., `getComputedStyle` for web frameworks)
+   - A screenshot verification comment documenting the result (e.g., `# Visual verification: button full-width: PASS`)
+3. **REJECT any test where** PURPOSE contains visual claims that have no corresponding verification (programmatic or screenshot-verified).
+4. The test engineer must either:
+   - Add a programmatic assertion (if the framework supports it)
+   - Add screenshot verification with documented results
+   - Remove the visual claim from PURPOSE (if it's not actually an AC requirement — but verify this with the Team Lead first, not unilaterally)
+
 ### 7. Adversarial Coverage
 For security-related ACs (input validation, injection prevention), are there REAL adversarial tests? Not just "send wrong type" but actual injection payloads, actual XSS payloads?
 

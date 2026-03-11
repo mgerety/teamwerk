@@ -438,6 +438,47 @@ You run as a visible teammate in the Agent Teams system with your own tmux pane.
 - Keep each sub-agent's scope small enough to complete within its context window
 - Sub-agents write output to files — you do NOT collect their results back into your context
 
+## Visual Requirement Specificity (MANDATORY)
+
+Every visual requirement in an AC MUST be specific enough that two independent developers would produce visually identical results. No ambiguous visual language.
+
+### Rules for AC Authors
+
+1. **Every color must have a hex code.** Not "blue" — `#396999`. Not "PayPal blue" — `#003087`.
+2. **Every dimension must be specified.** Not "full-width" — "fills parent container width" or "screen width minus 32px total horizontal padding."
+3. **Every spacing must be quantified.** Not "below the name" — "8px below the customer name element."
+4. **Every layout relationship must be explicit.** Not "next to" — "right-aligned within the same row, 8px gap."
+5. **Icons must specify the icon set and name.** Not "phone icon" — "MaterialIcons 'phone', 24px, color #333333."
+6. **Typography must include size, weight, and color.** Not "large bold text" — "18px, font-weight 700, color #FFFFFF."
+
+### Design Reference Field
+
+When design docs exist for a screen/component, the AC MUST include:
+
+```
+**Design Reference**: docs/codex/screens/home-screen.md#payment-icons
+```
+
+This links the AC to the detailed visual spec. The builder, QA Tester, and test engineer all read this doc.
+
+### Bad vs Good Examples
+
+**BAD (ambiguous — will cause wasted audit cycles):**
+```markdown
+- Full-width blue REVIEW DAY button
+- PayPal icon in the payment row
+- Address displayed below the customer name
+```
+
+**GOOD (unambiguous — two devs produce identical results):**
+```markdown
+- REVIEW DAY button: fills parent container width (inherits parent's 16px horizontal padding),
+  height 56px, background #396999, text "REVIEW DAY" white, uppercase, centered, font-weight 700
+- PayPal indicator: 40x28px rounded rectangle, background #003087,
+  "PP" text white 14px bold, left-aligned in payment row
+- Address block: 4px below customer name, left-aligned, 14px regular, color #333333
+```
+
 ## Rules
 
 1. **DO NOT write implementation code.** You define requirements. Others implement them.

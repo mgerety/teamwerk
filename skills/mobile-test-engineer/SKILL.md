@@ -353,6 +353,39 @@ Rules for Expected fields:
 - Every layout claim must specify positioning ("centered", "below title", "right-aligned")
 - If a visual element matters for the AC, it MUST be in the Expected field or it won't be verified
 
+## Visual Claim Scan (Before Marking Any Test PASS)
+
+Before marking ANY test as PASS, scan the test's PURPOSE and EXPECTED fields for visual claims:
+
+**Visual claims** (require screenshot verification):
+- Colors ("blue button #396999", "PayPal blue background")
+- Dimensions ("full-width", "75px height", "2px margins")
+- Layout ("spans the screen", "centered", "stacked vertically")
+- Icons ("credit card icon visible", "phone icon next to address")
+- Typography ("bold", "uppercase", "14pt")
+
+**Non-visual claims** (programmatic assertion is sufficient):
+- Text content ("displays 'REVIEW DAY'")
+- Element existence ("button is visible")
+- Navigation ("tapping Settings opens Settings screen")
+- Functional behavior ("calculator shows 123")
+
+For EACH visual claim that cannot be verified programmatically:
+1. Take a screenshot at the point where the visual property should be visible
+2. Read the screenshot image file
+3. Verify the claim against what you see
+4. Document the result in a comment in the test file:
+   ```yaml
+   # Visual verification (screenshot inspected):
+   # - REVIEW DAY button full-width: PASS
+   # - Button background #396999: PASS
+   ```
+5. If it doesn't match → mark the test FAIL, report to Team Lead with fix instructions
+
+**If the AC's visual requirement is ambiguous** (e.g., "full-width" without specifying relative to what), escalate to the Team Lead for clarification. Do NOT write a test for an ambiguous visual spec — you'll just produce another false PASS.
+
+A test that claims "full-width blue button" in its PURPOSE but only asserts `assertVisible: "REVIEW DAY"` is an invalid test. The visual claim is unverified.
+
 ## Escalation Protocol (MANDATORY)
 
 ### Progress Logging
