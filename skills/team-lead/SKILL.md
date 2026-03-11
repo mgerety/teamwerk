@@ -149,6 +149,7 @@ If any step fails, degrade gracefully: report the branch name and target so the 
 
 - **Backend Builder** -- builds server-side logic (API endpoints, validation, authentication, data persistence)
 - **Frontend Builder** -- builds the UI (components, styling, user interactions, API integration)
+- **QA Tester** -- visually inspects the running app after builders finish. Takes transient screenshots, compares against AC visual requirements, produces structured QA report with fix instructions. Spawned AFTER implementation, BEFORE test design.
 - **Test Designer** -- designs test strategy per AC, defines stub boundaries and session strategy. Produces `docs/test-design.md`. Spawned AFTER implementation, BEFORE test engineers.
 - **API Test Engineer** -- writes and runs API/integration tests (request/response contracts, auth, adversarial inputs)
 - **Mobile Test Engineer** -- writes and runs mobile E2E tests with Maestro (YAML flows, device testing, screenshots). Use for maestro/detox projects.
@@ -188,7 +189,8 @@ Think of it this way: the role (Backend Builder, Frontend Builder) is a skill se
 3. **Enforce the workflow order:**
    - Backend Builder creates API endpoints and server logic
    - Frontend Builder creates the UI that uses those endpoints
-   - Test Designer produces `docs/test-design.md` AFTER implementation is done, BEFORE test engineers start
+   - QA Tester visually verifies the implementation against AC visual requirements (Phase 3.25)
+   - Test Designer produces `docs/test-design.md` AFTER QA Tester approves, BEFORE test engineers start
    - API Test Engineer writes API tests AFTER test design is ready
    - UI Test Engineer writes E2E tests AFTER test design is ready
    - Both test engineers can work in parallel on their respective test types
@@ -214,6 +216,7 @@ Think of it this way: the role (Backend Builder, Frontend Builder) is a skill se
 2. Break each **selected** AC into backend tasks, frontend tasks, and test tasks. Ignore ACs that were not selected.
 3. Establish dependencies between tasks.
 4. Spawn teammates IMMEDIATELY. Do not over-plan. The builders will figure out implementation details — that's their job, not yours.
+- **Include design doc references.** When ACs have a `Design Reference:` field, include those paths in the builder's task assignment: "Read [design doc path] for exact visual specs before implementing."
 
 ### Phase 2: Backend First
 1. Backend Builder implements API/server logic for each AC
@@ -224,6 +227,19 @@ Think of it this way: the role (Backend Builder, Frontend Builder) is a skill se
 1. Frontend Builder wires up UI to the ready backend services
 2. Frontend Builder signals when each feature is visually complete
 3. You verify the feature works before unblocking the Test Designer
+4. Before proceeding, verify the builder included visual self-check results in their completion message
+
+### Phase 3.25: QA Testing (Visual Verification)
+1. Spawn a **QA Tester** teammate (use the qa-tester skill)
+2. QA Tester reads the ACs for completed work, extracting every visual requirement
+3. QA Tester reads design docs referenced in ACs (if any)
+4. QA Tester takes screenshots of the running app and visually verifies each requirement
+5. QA Tester deletes screenshots after verification (transient — not evidence)
+6. QA Tester produces `docs/qa-report.md` with PASS/FAIL per visual requirement
+7. You read the QA report:
+   - If all PASS: proceed to Phase 3.5 (Test Design)
+   - If any FAIL: route fix instructions to the appropriate builder, wait for fix, re-spawn QA Tester
+8. Do NOT proceed to Test Design with unresolved QA FAIL findings
 
 ### Phase 3.5: Test Design
 1. Spawn a **Test Designer** teammate (use the test-designer skill)
@@ -262,7 +278,8 @@ E2E test results are only accepted if visual verification was performed:
 3. If visual verification was not performed, REJECT the E2E results
 4. If any visual verification finding is FAIL, the test is FAIL regardless of what the test runner reported
 5. Text assertions verify CONTENT. Screenshot verification verifies APPEARANCE. Both must pass.
-6. **For projects using non-DOM E2E frameworks (Maestro, Detox):** the test engineer or Test Reviewer MUST have READ each screenshot image file and verified visual claims against AC requirements. "Screenshots exist" is NOT sufficient — they must be inspected. If the completion report does not include per-screenshot visual verification findings, REJECT and send back.
+6. Note: Phase 3.25 (QA Testing) already verified visual requirements before tests were written. This gate verifies that E2E tests ALSO verify visual claims — the QA Tester and E2E tests are independent checks.
+7. **For projects using non-DOM E2E frameworks (Maestro, Detox):** the test engineer or Test Reviewer MUST have READ each screenshot image file and verified visual claims against AC requirements. "Screenshots exist" is NOT sufficient — they must be inspected. If the completion report does not include per-screenshot visual verification findings, REJECT and send back.
 
 ### Phase 4.5: Adversarial Review
 1. Spawn an **Adversarial Reviewer** teammate (use the adversarial-reviewer skill)
