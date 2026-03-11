@@ -51,6 +51,14 @@ Before signaling "implementation complete" to the team-lead, verify EVERY test y
 
 These checks MUST pass before you submit. The adversarial reviewer WILL catch violations and route them back to you.
 
+## Visual Self-Check (When Applicable)
+
+Most backend work has no visual output. However, if your AC involves anything with visual output (API responses that drive UI rendering, HTML templates, PDF generation, email templates, etc.):
+
+1. **Verify the output matches the AC.** If the AC specifies a response format, verify your endpoint returns that exact format.
+2. **If the project has a running frontend**, consider checking that your API response renders correctly by reading a screenshot of the frontend after your endpoint is integrated. Take, verify, delete — screenshots are transient.
+3. **Include in your completion message** what you verified.
+
 ## Stack Discovery
 
 Before writing any code, read the project's source files to identify the backend framework in use (Express, ASP.NET Core, Django, FastAPI, Spring Boot, Gin, Rails, Phoenix, or equivalent). Look for:
