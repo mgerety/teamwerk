@@ -334,6 +334,32 @@ After all Playwright tests complete and screenshots are collected:
 
 4. DO NOT mark a test as PASS if you only verified text existence. Text assertions verify CONTENT. Screenshot verification verifies APPEARANCE. Both must pass.
 
+## Visual Claim Scan (Before Marking Any Test PASS)
+
+Before marking ANY test as PASS, scan the test's `// Purpose:` and `// Expected:` headers for visual claims.
+
+**Visual claims** (colors, dimensions, layout, icons, typography) — require verification.
+**Non-visual claims** (text content, element existence, navigation) — programmatic assertion is sufficient.
+
+For visual claims in Playwright/Cypress projects:
+1. **Prefer programmatic verification** — use `page.evaluate()` to READ (not write) computed styles:
+   ```typescript
+   const bg = await el.evaluate(el => getComputedStyle(el).backgroundColor);
+   expect(bg).toBe('rgb(57, 105, 153)'); // #396999
+   ```
+2. **If programmatic verification is not possible**, take a screenshot, read it, and verify visually.
+3. Document results in a comment in the test file:
+   ```typescript
+   // Visual verification (programmatic):
+   // - Button background #396999: PASS (computed: rgb(57, 105, 153))
+   // - Button full-width: PASS (width: 1264px, viewport: 1280px, margins: 8px each side)
+   ```
+4. If it doesn't match → FAIL the test and report to Team Lead with fix instructions.
+
+**If the AC's visual requirement is ambiguous**, escalate to the Team Lead for clarification. Do NOT guess.
+
+A test that claims "full-width blue button" in its PURPOSE but only asserts text visibility is an invalid test. The visual claim is unverified.
+
 ## Lint Compliance
 
 Test files are subject to project lint rules if configured. Run the project's lint command after writing tests to ensure compliance.
