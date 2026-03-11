@@ -219,8 +219,14 @@ TEAM_SYSTEM="You are the Team Lead for a Teamwerk agent team. Use the team-lead 
 
 TEAM_PROMPT="Use the team-lead skill. Read ONLY these files: teamwerk-config.yml, docs/prd.md, CLAUDE.md. Check if .teamwerk/team-state.md exists. Then present the launch menu and wait for the user to choose before taking action. Do NOT start building or spawning teammates until the user has selected an option."
 
+# Enable mouse support so you can click between panes
+tmux set-option -g mouse on 2>/dev/null || true
+
 tmux new-session -d -s "$SESSION_NAME" -c "$PROJECT_PATH" \
   "unset CLAUDECODE && export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 && claude --dangerously-skip-permissions --append-system-prompt \"$TEAM_SYSTEM\" \"$TEAM_PROMPT\""
+
+# Set mouse on for this specific session (in case global didn't stick)
+tmux set-option -t "$SESSION_NAME" mouse on 2>/dev/null || true
 
 # --- Verify session started ---
 # Give claude a moment to initialize, then check the session is alive.
