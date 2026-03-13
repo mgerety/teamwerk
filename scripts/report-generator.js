@@ -719,20 +719,15 @@ function loadTestMetadata(testsDir) {
   const metadata = {};
   if (!testsDir || !fs.existsSync(testsDir)) return metadata;
 
-  for (const entry of fs.readdirSync(testsDir, { withFileTypes: true })) {
-    if (!entry.isDirectory()) continue;
-
-    const screenName = entry.name.toLowerCase();
-    const screenDir = path.join(testsDir, entry.name);
-    const scenarios = [];
-
-    const yamlFiles = fs.readdirSync(screenDir)
+  function loadYAMLsFromDir(dir, screenName) {
+    const yamlFiles = fs.readdirSync(dir)
       .filter((f) => /\.yaml$/i.test(f))
       .sort();
 
+    const scenarios = [];
     for (const yamlFile of yamlFiles) {
       try {
-        const content = fs.readFileSync(path.join(screenDir, yamlFile), "utf-8");
+        const content = fs.readFileSync(path.join(dir, yamlFile), "utf-8");
         const parsed = parseYAMLFile(content);
         parsed.fileName = yamlFile.replace(/\.yaml$/i, "");
         if (!parsed.name) {
@@ -745,10 +740,24 @@ function loadTestMetadata(testsDir) {
         scenarios.push(parsed);
       } catch { /* skip */ }
     }
+    return scenarios;
+  }
 
-    if (scenarios.length > 0) {
-      metadata[screenName] = scenarios;
+  for (const entry of fs.readdirSync(testsDir, { withFileTypes: true })) {
+    if (entry.isDirectory()) {
+      const screenName = entry.name.toLowerCase();
+      const scenarios = loadYAMLsFromDir(path.join(testsDir, entry.name), screenName);
+      if (scenarios.length > 0) {
+        metadata[screenName] = scenarios;
+      }
     }
+  }
+
+  // Also load top-level YAML files (not in subdirectories) under "default" screen
+  const topLevel = loadYAMLsFromDir(testsDir, "default");
+  if (topLevel.length > 0) {
+    if (!metadata["default"]) metadata["default"] = [];
+    metadata["default"].push(...topLevel);
   }
 
   return metadata;
@@ -767,7 +776,9 @@ function parseXMLFileName(xmlFile) {
   if (match) {
     return { screen: match[1], testKey: match[2] };
   }
-  return { screen: base, testKey: base };
+  // Filename doesn't start with letters (e.g. "26-theming-sweep") —
+  // screen unknown, will be resolved by searching all screens during matching
+  return { screen: null, testKey: base };
 }
 
 // ---------------------------------------------------------------------------
@@ -1518,6 +1529,9 @@ function main() {
     return;
   }
 
+  // Load YAML metadata early so XML filename resolution can use it
+  const testMeta = loadTestMetadata(testsDir);
+
   // Parse result files and group by screen
   const xmlByScreen = {}; // { screen: [{ testKey, tc, device }] }
 
@@ -1536,7 +1550,20 @@ function main() {
       continue;
     }
     const suites = parseJUnitXML(xml);
-    const { screen, testKey } = parseXMLFileName(xmlFile);
+    let { screen, testKey } = parseXMLFileName(xmlFile);
+
+    // If screen couldn't be parsed from filename (e.g. digit-prefixed),
+    // search all screens in testMeta for a matching YAML fileName
+    if (screen === null) {
+      for (const [screenName, scenarios] of Object.entries(testMeta)) {
+        if (scenarios.find((s) => s.fileName === testKey)) {
+          screen = screenName;
+          break;
+        }
+      }
+    }
+    // If still unresolved, use the full base as screen (orphan bucket)
+    if (screen === null) screen = testKey;
 
     if (!xmlByScreen[screen]) xmlByScreen[screen] = [];
 
@@ -1589,9 +1616,6 @@ function main() {
   screenshotDirs.push(path.join(path.dirname(inputDir), "screenshots"));
   screenshotDirs.push(inputDir); // PNGs directly in results dir
   const allScreenshots = findScreenshots(...screenshotDirs);
-
-  // Load YAML metadata
-  const testMeta = loadTestMetadata(testsDir);
 
   // Find Maestro commands
   const commandFiles = findMaestroCommands(inputDir);
