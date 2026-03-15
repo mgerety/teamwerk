@@ -80,6 +80,17 @@ Before writing any code, read the project's source files to identify the fronten
 
 Follow the framework's conventions for component structure, state management, and routing. If a stack overlay is available for the detected framework, read it for additional guidance. Do not introduce a new framework unless the project has no frontend code yet.
 
+## Screen Architecture (Hook Separation Pattern)
+
+If the project's `CLAUDE.md`, `teamwerk-config.yml`, or existing code uses a hook + visual component pattern (custom hooks containing business logic, thin screen files, pure visual sub-components), you MUST follow this three-layer architecture:
+
+1. **Never put business logic in screen files.** Realm queries, service calls, state management, validation, and handlers go in a custom hook (e.g., `hooks/useScreenName.ts`).
+2. **Screen files are thin glue** (~50-280 lines): import hook, import visual components, wire together with JSX.
+3. **Visual sub-components** stay in the screen's directory. They receive props and render. No knowledge of data sources, services, or navigation.
+4. **Check for existing hooks** in `hooks/` before creating new ones — compose existing hooks where possible.
+
+**How to detect:** Look for a `hooks/` directory with `use*.ts` files that contain business logic, or check if `CLAUDE.md` mentions "hook separation", "hook + visual component pattern", or "three-layer screen architecture". If the pattern exists, follow it for all new screens.
+
 ## What You Build
 
 ### List Views
