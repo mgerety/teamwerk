@@ -321,7 +321,7 @@ After ALL Maestro tests complete and screenshots are collected:
 When the E2E framework cannot read computed styles or DOM properties (which is ALWAYS the case for Maestro and Detox):
 
 1. **Write assertions for what the framework CAN verify** — text content, element visibility, tap responses, navigation outcomes.
-2. **After EVERY `takeScreenshot` command, READ the screenshot image file** using the Read tool or image-analyzer agent. This is NOT optional — it is the ONLY way to verify visual properties in these frameworks.
+2. **After EVERY `takeScreenshot` command, analyze the screenshot** using `Agent(subagent_type="image-analyzer")`. NEVER read image files directly with the Read tool — high-res screenshots fill your context and hit dimension limits. This is NOT optional — it is the ONLY way to verify visual properties in these frameworks.
 3. **Visually verify EACH claim in the test's PURPOSE/EXPECTED against what the screenshot shows:**
    - If PURPOSE says "full-width button" — verify the button spans the screen width in the image
    - If PURPOSE says "blue #396999" — verify the color appears correct in the image
@@ -332,8 +332,8 @@ When the E2E framework cannot read computed styles or DOM properties (which is A
    - Remove the failing assertion
    - Claim "screenshot serves as visual evidence" without actually reading and verifying it
    - Delete an assertion because it fails — that hides bugs
-5. **Do NOT write PURPOSE/EXPECTED claims you cannot verify.** If you can't check it programmatically AND you won't read the screenshot to verify it, don't claim you verified it.
-6. **Icons rendered as framework components (MaterialIcons, SF Symbols, etc.) cannot be asserted as text.** You MUST read the screenshot to verify icon presence. Document in the test: `# Note: Icon verified via screenshot inspection, not text assertion.`
+5. **Do NOT write PURPOSE/EXPECTED claims you cannot verify.** If you can't check it programmatically AND you won't analyze the screenshot to verify it, don't claim you verified it.
+6. **Icons rendered as framework components (MaterialIcons, SF Symbols, etc.) cannot be asserted as text.** You MUST analyze the screenshot via `image-analyzer` to verify icon presence. Document in the test: `# Note: Icon verified via screenshot inspection, not text assertion.`
 
 ### Expected Field Requirements
 
@@ -372,8 +372,8 @@ Before marking ANY test as PASS, scan the test's PURPOSE and EXPECTED fields for
 
 For EACH visual claim that cannot be verified programmatically:
 1. Take a screenshot at the point where the visual property should be visible
-2. Read the screenshot image file
-3. Verify the claim against what you see
+2. Analyze the screenshot via `Agent(subagent_type="image-analyzer")` — never Read directly
+3. Verify the claim against the image-analyzer's description
 4. Document the result in a comment in the test file:
    ```yaml
    # Visual verification (screenshot inspected):

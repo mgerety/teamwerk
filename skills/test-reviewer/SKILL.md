@@ -85,7 +85,7 @@ Do E2E tests take screenshots? Are those screenshots actually verified (assertio
 
 For projects using Maestro, Detox, or other frameworks without DOM access (check `testing.e2e.framework` in `teamwerk-config.yml`):
 
-1. **READ each screenshot image file** referenced in E2E tests. Use the Read tool or image-analyzer agent — do NOT skip this step.
+1. **Analyze each screenshot image file** referenced in E2E tests using `Agent(subagent_type="image-analyzer")`. NEVER read image files directly with the Read tool — high-res screenshots fill your context and hit dimension limits. Do NOT skip this step.
 2. For each screenshot, compare what you SEE against the test's PURPOSE and EXPECTED claims.
 3. **REJECT any test where**:
    - The screenshot contradicts a visual claim in PURPOSE/EXPECTED (e.g., PURPOSE says "full-width button" but screenshot shows margins)

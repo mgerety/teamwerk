@@ -58,7 +58,7 @@ When you finish implementing an AC with visual requirements (colors, layout, siz
 1. **Read the AC's visual requirements.** Extract every specific visual claim — hex colors, dimensions, layout relationships, icon presence.
 2. **Read the design doc** if the AC has a `Design Reference:` field.
 3. **Take a screenshot** of the implemented feature in the running app (use the appropriate mechanism for the project — Maestro `takeScreenshot`, Playwright `page.screenshot()`, emulator screenshot, `adb exec-out screencap`, etc.)
-4. **Read the screenshot** using your multimodal vision capabilities (Read tool on the PNG file).
+4. **Analyze the screenshot** using `Agent(subagent_type="image-analyzer")` — never read image files directly with the Read tool, as high-res screenshots fill your context and hit dimension limits.
 5. **Compare each visual requirement against what you see:**
    - Does the color match the hex code in the AC?
    - Does the sizing match the spec (full-width, specific dimensions)?

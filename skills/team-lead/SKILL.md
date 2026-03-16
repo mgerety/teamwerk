@@ -280,7 +280,7 @@ E2E test results are only accepted if visual verification was performed:
 4. If any visual verification finding is FAIL, the test is FAIL regardless of what the test runner reported
 5. Text assertions verify CONTENT. Screenshot verification verifies APPEARANCE. Both must pass.
 6. Note: Phase 3.25 (QA Testing) already verified visual requirements before tests were written. This gate verifies that E2E tests ALSO verify visual claims — the QA Tester and E2E tests are independent checks.
-7. **For projects using non-DOM E2E frameworks (Maestro, Detox):** the test engineer or Test Reviewer MUST have READ each screenshot image file and verified visual claims against AC requirements. "Screenshots exist" is NOT sufficient — they must be inspected. If the completion report does not include per-screenshot visual verification findings, REJECT and send back.
+7. **For projects using non-DOM E2E frameworks (Maestro, Detox):** the test engineer or Test Reviewer MUST have analyzed each screenshot via `image-analyzer` subagent and verified visual claims against AC requirements. "Screenshots exist" is NOT sufficient — they must be inspected. If the completion report does not include per-screenshot visual verification findings, REJECT and send back.
 
 ### Phase 4.5: Adversarial Review
 1. Spawn an **Adversarial Reviewer** teammate (use the adversarial-reviewer skill)
