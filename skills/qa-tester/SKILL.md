@@ -54,15 +54,23 @@ Always save screenshots to `/tmp/` or another temporary location — never to th
 
 ### How to Verify Screenshots
 
+**NEVER read screenshot image files directly with the Read tool.** High-resolution screenshots (especially tablet at 1600x2560+) fill your context window and hit dimension limits after 2-3 images, leaving you stuck.
+
+Instead, use the `image-analyzer` subagent for every screenshot:
+
 1. Take the screenshot
-2. **Read the screenshot file** using the Read tool — this uses multimodal vision to see the image
-3. Compare what you see against each visual requirement extracted from the AC
-4. Record your finding (PASS or FAIL with details)
-5. **DELETE the screenshot immediately** after verification: `rm /tmp/qa-verify-acX.png`
+2. **Analyze via subagent**: Use the Agent tool with `subagent_type: "image-analyzer"` and a prompt describing the specific visual requirements to check:
+   ```
+   Agent(subagent_type="image-analyzer", prompt="Read the screenshot at /tmp/qa-verify-acX.png.
+   Describe in detail: [list specific visual requirements — colors, spacing, layout, icons, etc.]")
+   ```
+3. The image-analyzer returns a text description — use this for your PASS/FAIL findings
+4. **DELETE the screenshot immediately** after analysis: `rm /tmp/qa-verify-acX.png`
 
 ### Rules
 
-- **ALWAYS delete screenshots after reading them.** They are transient. Do not leave them on disk.
+- **NEVER use the Read tool on image files.** Always delegate to `image-analyzer`. This is non-negotiable.
+- **ALWAYS delete screenshots after analysis.** They are transient. Do not leave them on disk.
 - **NEVER commit screenshots to git.** They are not evidence — the evidence is the QA report.
 - **NEVER save screenshots to the project directory.** Use `/tmp/` exclusively.
 - **Take one screenshot per AC or logical screen area.** Do not take 20 screenshots of the same page.
@@ -75,8 +83,8 @@ For each AC with visual requirements:
 1. **Extract** all visual requirements from the AC text and any referenced design doc
 2. **Navigate** to the relevant page or screen in the running application
 3. **Take a screenshot** of the current state
-4. **Read the screenshot** using the Read tool (multimodal vision)
-5. **Compare** each visual requirement against what the screenshot shows:
+4. **Analyze the screenshot** using `Agent(subagent_type="image-analyzer")` — never Read directly
+5. **Compare** each visual requirement against what the image-analyzer description shows:
    - Is the color correct? Compare hex codes if specified.
    - Is the spacing correct? Check margins, padding, gaps.
    - Is the typography correct? Check font size, weight, family.
@@ -151,7 +159,7 @@ If you cannot identify the exact file and line, provide the component name and C
 
 You run as a visible teammate in the Agent Teams system. You have your own tmux pane. The user can see everything you do.
 
-**NEVER use the Task tool to spawn sub-agents.** Do all your work directly in your own context. The QA report is one file — write it yourself. Walk through each AC sequentially: extract requirements, take screenshot, read it, compare, record finding, delete screenshot.
+**The only sub-agent you may spawn is `image-analyzer` for screenshot analysis.** Do NOT spawn any other sub-agents. Do all other work directly in your own context. The QA report is one file — write it yourself. Walk through each AC sequentially: extract requirements, take screenshot, analyze via image-analyzer, compare, record finding, delete screenshot.
 
 ## Coordination
 
