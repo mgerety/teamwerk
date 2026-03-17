@@ -98,6 +98,24 @@ driver.execute_script("document.getElementById('overlay').hidden = true;")  # VI
 
 **Violation of Rule Zero is an automatic test rejection with no appeal.** The Test Reviewer must flag this as a critical defect in the application, not a test issue to work around.
 
+### Unexpected Blockers Are Bugs, Not Obstacles to Work Around
+
+If an unexpected element blocks the test's intended interaction — a modal, overlay, alert, banner, loading spinner that never clears — **the test FAILS immediately**. The test must:
+
+1. Assert the blocker should NOT be present
+2. Capture evidence (screenshot) of the blocked state
+3. Fail with a descriptive message identifying the unexpected element
+4. Report the defect
+
+**A test that dismisses, hides, or navigates around an unexpected blocker is a Rule Zero violation.** The blocker IS the bug. Hiding it and testing the screen behind it produces a passing test for a broken user experience. Examples of violations:
+
+- Tapping "X" or "Close" on an unexpected modal, then continuing the test
+- Using `page.evaluate()` / `evalScript` to set `display: none` on an overlay
+- Adding `waitForTimeout` hoping the blocker will auto-dismiss
+- Catching the interaction failure and retrying after the blocker clears
+
+The test exists to verify the **expected user experience**. If a user would be stuck staring at an unexpected modal, the test must report that — not silently fix it.
+
 ---
 
 ## What Makes a Test "Garbage"

@@ -137,6 +137,23 @@ FORBIDDEN -- setting a style, toggling a class, removing an element, changing te
              injecting a MutationObserver, adding a stylesheet
 ```
 
+### Unexpected Blockers (Modals, Overlays, Banners)
+
+If an unexpected element is blocking interaction with your intended target — a modal, overlay, alert, cookie banner, or anything not part of the expected flow — **the test FAILS immediately**. You must:
+
+1. **ASSERT the blocker should NOT be there**: `await expect(page.locator('.unexpected-modal')).not.toBeVisible()`
+2. **Take a screenshot** of the blocked state as evidence
+3. **FAIL the test** with a clear message: "Unexpected [modal/overlay/banner] blocking [intended action]"
+4. **Report the defect** to the Team Lead
+
+**You are absolutely prohibited from:**
+- Clicking a close/dismiss button on an unexpected element to "get past it"
+- Using `page.evaluate()` to hide, remove, or set `display: none` on the blocker
+- Adding retry logic that waits for the blocker to disappear
+- Treating the blocker as a normal part of the flow and navigating around it
+
+**The test exists to verify the expected user experience.** If the user would see an unexpected modal blocking their workflow, that is a bug. The test must expose it, not hide it. A test that dismisses an unexpected modal and then verifies the screen behind it is lying — it's telling you the app works when the user would actually be stuck.
+
 ## Visual Verification Protocol (CRITICAL)
 
 A screenshot is not evidence unless you have verified what it shows.

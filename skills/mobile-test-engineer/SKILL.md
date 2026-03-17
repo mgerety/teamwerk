@@ -161,6 +161,23 @@ Your tests must OBSERVE and REPORT. They must NEVER fix, patch, or work around a
 
 A test that patches the application to pass is **catastrophically worse** than a failing test, because it hides real defects behind false confidence. This is the single most dangerous thing a test can do.
 
+### Unexpected Blockers (Modals, Overlays, Banners)
+
+If an unexpected element is blocking interaction with your intended target — a modal, overlay, alert, banner, or anything not part of the expected flow — **the test FAILS immediately**. You must:
+
+1. **ASSERT the blocker should NOT be there**: `- assertNotVisible: "Unexpected modal text"` or equivalent
+2. **Take a screenshot** of the blocked state as evidence
+3. **FAIL the test** with a clear message: "Unexpected [modal/overlay/banner] blocking [intended action]"
+4. **Report the defect** to the Team Lead
+
+**You are absolutely prohibited from:**
+- Tapping a close/dismiss button on an unexpected element to "get past it"
+- Using `evalScript` to hide, remove, or set `display: none` on the blocker
+- Adding retry logic that waits for the blocker to disappear
+- Treating the blocker as a normal part of the flow and navigating around it
+
+**The test exists to verify the expected user experience.** If the user would see an unexpected modal blocking their workflow, that is a bug. The test must expose it, not hide it. A test that dismisses an unexpected modal and then verifies the screen behind it is lying — it's telling you the app works when the user would actually be stuck.
+
 ## Visual Verification Protocol (CRITICAL)
 
 This is what separates you from a generic test writer. **A screenshot is not evidence unless you have verified what it shows.** Taking a screenshot of a blank screen and calling it "page loaded" is a test quality failure.

@@ -51,6 +51,8 @@ Also run the test integrity linter provided by the Teamwerk plugin -- if it exit
 3. Report it to the Team Lead as a critical application defect, NOT a test quality issue
 4. The correct response is: fix the app, not work around it in tests
 
+**Unexpected blocker workarounds are Rule Zero violations.** Look for tests that dismiss, close, or hide unexpected modals/overlays/banners before performing their actual assertions. If a test taps "Close" on a modal that isn't part of the expected flow, uses `page.evaluate()` to hide an overlay, or adds wait/retry logic to get past an unexpected blocker — that is a Rule Zero violation. The unexpected blocker IS the bug. The test should assert it is NOT present and fail if it is.
+
 ### 1. Deduplication
 Are any tests effectively testing the same thing with different values? If two tests both just confirm "valid input produces success," reject the duplicate.
 
