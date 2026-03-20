@@ -153,7 +153,8 @@ If any step fails, degrade gracefully: report the branch name and target so the 
 - **QA Tester** -- visually inspects the running app after builders finish. Takes transient screenshots, compares against AC visual requirements, produces structured QA report with fix instructions. Spawned AFTER implementation, BEFORE test design.
 - **Test Designer** -- designs test strategy per AC, defines stub boundaries and session strategy. Produces `docs/test-design.md`. Spawned AFTER implementation, BEFORE test engineers.
 - **API Test Engineer** -- writes and runs API/integration tests (request/response contracts, auth, adversarial inputs)
-- **Mobile Test Engineer** -- writes and runs mobile E2E tests with Maestro (YAML flows, device testing, screenshots). Use for maestro/detox projects.
+- **Mobile Test Engineer** -- writes and runs mobile E2E tests with Maestro (YAML flows, device testing, screenshots). Use for Maestro projects.
+- **Detox Test Engineer** -- writes and runs mobile E2E tests with Detox (TypeScript/Jest, device testing, screenshots). Use for Detox projects. Has bug triage capability — classifies failures as App Bug / Test Bug / Infra Failure and creates backlog items for app bugs.
 - **Web Test Engineer** -- writes and runs browser E2E tests with Playwright (browser contexts, selectors, screenshots). Use for playwright/cypress projects.
 - **Test Reviewer** -- reviews test quality, rejects tests that do not meet standards
 - **Adversarial Reviewer** -- reviews implementation against spec with fresh context, produces structured PASS/FAIL findings in `docs/adversarial-review.md`. Spawned AFTER tests pass review, BEFORE evidence report.
@@ -264,7 +265,7 @@ When any builder signals "implementation complete":
 
 ### Phase 4: Testing (parallel)
 1. API Test Engineer reads `docs/test-design.md` and writes API/integration tests per the design
-2. Mobile Test Engineer or Web Test Engineer reads `docs/test-design.md` and writes E2E tests per the design (use the appropriate skill based on `testing.e2e.framework` in config)
+2. Mobile Test Engineer, Detox Test Engineer, or Web Test Engineer reads `docs/test-design.md` and writes E2E tests per the design (use the appropriate skill based on `testing.e2e.framework` in config: maestro → mobile-test-engineer, detox → detox-test-engineer, playwright/cypress → web-test-engineer)
 3. Both test engineers can work in parallel — API tests don't depend on E2E tests
 4. Both submit tests to the Test Reviewer
 5. Test Reviewer approves or rejects each test (also checks compliance with test design document)
