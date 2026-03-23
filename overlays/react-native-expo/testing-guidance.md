@@ -10,7 +10,6 @@ React Native + Expo projects should prefer this stack order:
 1. **Maestro** for E2E testing — YAML-based flows, simpler setup, less room for garbage tests, per-scenario file pattern
 2. **Jest** for unit tests (included with Expo by default)
 3. **React Native Testing Library** for component tests
-4. **Detox** as an alternative for E2E when Maestro cannot cover the scenario (complex gestures, native module testing)
 
 If the project's `teamwerk-config.yml` specifies `testing.e2e.framework`, use that. Otherwise, prefer Maestro for new E2E test setups.
 
@@ -21,12 +20,9 @@ If the project's `teamwerk-config.yml` specifies `testing.e2e.framework`, use th
 ```
 tests/
   e2e/
-    flows/                     -- Maestro flows (if using Maestro)
+    flows/                     -- Maestro flows
       create-task.yaml
       delete-task.yaml
-    specs/                     -- Detox specs (if using Detox)
-      taskCrud.e2e.ts
-      xssPrevention.e2e.ts
   evidence/                    -- Screenshots
   report/                      -- HTML evidence report
 src/
@@ -38,147 +34,6 @@ src/
     __tests__/
       useTasks.test.ts
 jest.config.js                 -- or in package.json
-.detoxrc.js                    -- Detox config (if using Detox)
-```
-
----
-
-## E2E Testing with Detox
-
-### Setup
-
-Detox requires a built app binary. Configure in `.detoxrc.js`:
-
-```js
-module.exports = {
-  testRunner: {
-    args: {
-      config: 'e2e/jest.config.js',
-    },
-  },
-  apps: {
-    'ios.debug': {
-      type: 'ios.app',
-      binaryPath: 'ios/build/Build/Products/Debug-iphonesimulator/MyApp.app',
-      build: 'xcodebuild -workspace ios/MyApp.xcworkspace -scheme MyApp -configuration Debug -sdk iphonesimulator -derivedDataPath ios/build',
-    },
-    'android.debug': {
-      type: 'android.apk',
-      binaryPath: 'android/app/build/outputs/apk/debug/app-debug.apk',
-      build: 'cd android && ./gradlew assembleDebug assembleAndroidTest -DtestBuildType=debug',
-    },
-  },
-  devices: {
-    simulator: { type: 'ios.simulator', device: { type: 'iPhone 15' } },
-    emulator: { type: 'android.emulator', device: { avdName: 'Pixel_4_API_34' } },
-  },
-  configurations: {
-    'ios.sim.debug': { device: 'simulator', app: 'ios.debug' },
-    'android.emu.debug': { device: 'emulator', app: 'android.debug' },
-  },
-};
-```
-
-### Detox Test Pattern
-
-```ts
-describe('Task CRUD', () => {
-  beforeAll(async () => {
-    await device.launchApp();
-  });
-
-  beforeEach(async () => {
-    await device.reloadReactNative();
-  });
-
-  it('AC-1: Creates task with valid title', async () => {
-    await element(by.id('title-input')).typeText('New task from Detox');
-    await element(by.id('submit-btn')).tap();
-
-    // Wait for the new item to appear
-    await waitFor(element(by.text('New task from Detox')))
-      .toBeVisible()
-      .withTimeout(5000);
-
-    // Take screenshot as evidence
-    await device.takeScreenshot('ac1-task-created');
-  });
-
-  it('AC-1: Shows error for empty title submission', async () => {
-    await element(by.id('submit-btn')).tap();
-
-    await waitFor(element(by.id('error-message')))
-      .toBeVisible()
-      .withTimeout(3000);
-
-    await expect(element(by.id('error-message'))).toHaveText('Title is required');
-    await device.takeScreenshot('ac1-empty-title-error');
-  });
-
-  it('AC-4: Shows confirmation dialog before deletion', async () => {
-    // Tap delete on first item
-    await element(by.id('delete-btn')).atIndex(0).tap();
-
-    // Verify dialog appears
-    await waitFor(element(by.id('confirm-dialog')))
-      .toBeVisible()
-      .withTimeout(3000);
-
-    await device.takeScreenshot('ac4-delete-confirmation');
-
-    // Confirm deletion
-    await element(by.id('confirm-btn')).tap();
-
-    await waitFor(element(by.id('confirm-dialog')))
-      .not.toBeVisible()
-      .withTimeout(3000);
-  });
-});
-```
-
-### Detox Element Matchers
-
-```ts
-// By testID
-element(by.id('task-list'))
-
-// By text content
-element(by.text('My Tasks'))
-
-// By label (accessibility)
-element(by.label('Add task button'))
-
-// Indexed (when multiple matches)
-element(by.id('task-item')).atIndex(0)
-
-// Descendant matching
-element(by.id('error-message').withAncestor(by.id('task-form')))
-```
-
-### Detox Assertions
-
-```ts
-await expect(element(by.id('task-list'))).toBeVisible();
-await expect(element(by.id('task-list'))).not.toBeVisible();
-await expect(element(by.id('title-input'))).toHaveText('Expected text');
-await expect(element(by.id('task-item'))).toExist();
-```
-
-### Detox Waiting (state-based, NOT hardcoded)
-
-```ts
-// WRONG -- hardcoded timeout
-await new Promise(resolve => setTimeout(resolve, 3000));
-
-// RIGHT -- state-based waiting
-await waitFor(element(by.id('task-item')))
-  .toBeVisible()
-  .withTimeout(5000);
-
-// Wait for element to disappear
-await waitFor(element(by.id('loading-spinner')))
-  .not.toBeVisible()
-  .withTimeout(10000);
 ```
 
 ---
@@ -423,14 +278,6 @@ Expo includes Jest configuration by default. Extend in `package.json` or `jest.c
 
 ## Screenshot Evidence
 
-### Detox
-
-```ts
-// Named screenshot
-await device.takeScreenshot('ac1-task-created');
-// Saved to artifacts directory configured in .detoxrc.js
-```
-
 ### Maestro
 
 ```yaml
@@ -446,7 +293,7 @@ const tree = render(<TaskList tasks={mockTasks} />);
 expect(tree.toJSON()).toMatchSnapshot();
 ```
 
-**Note**: Jest snapshots are NOT the same as screenshot evidence. E2E screenshots from Detox or Maestro are required for the evidence report.
+**Note**: Jest snapshots are NOT the same as screenshot evidence. E2E screenshots from Maestro are required for the evidence report.
 
 ---
 
@@ -455,10 +302,6 @@ expect(tree.toJSON()).toMatchSnapshot();
 ### Running on Both Platforms
 
 ```bash
-# Detox
-detox test --configuration ios.sim.debug
-detox test --configuration android.emu.debug
-
 # Maestro (automatically uses connected device/emulator)
 maestro test flows/
 
@@ -466,25 +309,10 @@ maestro test flows/
 npx jest
 ```
 
-### Platform-Specific Assertions
-
-Some behaviors differ between iOS and Android:
-
-```ts
-// Detox: platform-conditional assertions
-if (device.getPlatform() === 'ios') {
-  await expect(element(by.id('date-picker'))).toBeVisible();
-} else {
-  // Android date picker has different structure
-  await expect(element(by.id('date-picker-android'))).toBeVisible();
-}
-```
-
 ---
 
 ## Test File Naming
 
-- Detox E2E: `*.e2e.ts` or `*.e2e.js`
 - Maestro flows: `*.yaml`
 - Component tests: `*.test.tsx` or `*.test.ts`
 - Unit tests: `*.test.ts`
@@ -500,10 +328,6 @@ npx jest
 npx jest --watch
 npx jest TaskForm.test.tsx
 
-# Detox E2E
-detox build --configuration ios.sim.debug
-detox test --configuration ios.sim.debug
-
 # Maestro E2E
 maestro test tests/e2e/flows/create-task.yaml
 maestro test tests/e2e/flows/
@@ -513,12 +337,11 @@ maestro test tests/e2e/flows/
 
 ## Common Gotchas
 
-1. **`testID` not `data-testid`** -- React Native uses `testID` prop. Both Detox and RNTL query by it
+1. **`testID` not `data-testid`** -- React Native uses `testID` prop. RNTL queries by it
 2. **`transformIgnorePatterns`** -- Jest fails on React Native packages that ship ES modules. The patterns list must include all such packages
-3. **Detox build required** -- Detox tests run against a compiled binary, not a dev server. You must `detox build` before `detox test`
-4. **Maestro requires a running app** -- Unlike Detox, Maestro connects to an already-running app on a device/emulator
-5. **Async state updates** -- Use `waitFor` in both Detox and RNTL to handle async rendering. Never use `setTimeout` or `sleep`
-6. **Mock native modules** -- Many Expo modules use native code that Jest cannot run. Mock them in `jest.setup.js`
-7. **FlatList rendering** -- FlatList virtualizes items. In tests, only visible items are rendered. Scroll to find off-screen items in E2E tests
-8. **Keyboard in E2E** -- On device/emulator, the software keyboard can obscure elements. Use `device.disableSynchronization()` in Detox or scroll before tapping
-9. **Screenshot paths** -- Detox saves to its configured artifacts directory. Maestro saves to the path you specify. Ensure evidence lands in `tests/evidence/` for the report
+3. **Maestro requires a running app** -- Maestro connects to an already-running app on a device/emulator
+4. **Async state updates** -- Use `waitFor` in RNTL to handle async rendering. Never use `setTimeout` or `sleep`
+5. **Mock native modules** -- Many Expo modules use native code that Jest cannot run. Mock them in `jest.setup.js`
+6. **FlatList rendering** -- FlatList virtualizes items. In tests, only visible items are rendered. Scroll to find off-screen items in E2E tests
+7. **Keyboard in E2E** -- On device/emulator, the software keyboard can obscure elements. Scroll before tapping
+8. **Screenshot paths** -- Maestro saves to the path you specify. Ensure evidence lands in `tests/evidence/` for the report

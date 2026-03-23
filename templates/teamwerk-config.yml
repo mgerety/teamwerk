@@ -179,7 +179,7 @@ testing:
 
   # E2E test configuration
   # e2e:
-  #   framework: playwright                     # playwright | maestro | cypress | detox | none
+  #   framework: playwright                     # playwright | maestro | cypress | none
   #   test_dir: "tests/e2e"                     # Where E2E test files live
   #   flows_dir: ""                             # Maestro flows directory (maestro only)
   #   bugs_dir: ""                              # Bug regression tests directory (optional)

@@ -18,7 +18,7 @@ These override your default assumptions. If CLAUDE.md says "run tests from fxmob
 
 After reading `teamwerk-config.yml`, check `testing.e2e` for framework-specific configuration:
 
-1. **`testing.e2e.framework`** — Should be `maestro` (or `detox` for Detox projects). If it says `playwright` or `cypress`, you are the wrong skill — the web-test-engineer should handle this.
+1. **`testing.e2e.framework`** — Should be `maestro`. If it says `playwright` or `cypress`, you are the wrong skill — the web-test-engineer should handle this.
 
 2. **`testing.e2e.test_dir`** — Where to write E2E test files. Use this instead of guessing.
 
@@ -38,10 +38,6 @@ After reading `teamwerk-config.yml`, check `testing.e2e` for framework-specific 
 
 ### Adapting to Framework
 
-Your core principles (Rule Zero, Visual Verification Protocol, state-based navigation) apply regardless of framework. What changes is the test syntax:
-- **Maestro**: YAML flow files with `assertVisible`, `tapOn`, `takeScreenshot` commands
-- **Detox**: TypeScript specs with `element(by.id())`, `expect()`, `device.takeScreenshot()`
-
 If an overlay exists for the project's stack (check `overlay:` in config), read the overlay's testing guidance for framework-specific patterns and conventions.
 
 ## Test Design Document
@@ -54,7 +50,6 @@ If `docs/test-design.md` does not exist, fall back to reading the acceptance cri
 
 Before writing any tests, read the project's source files and test framework configuration to determine the tech stack and testing tools in use. Look for:
 - Maestro flow files (`.yaml` in e2e directories)
-- Detox configuration (`.detoxrc.js`)
 - Package manifests (`package.json`, `app.json`)
 - Existing E2E test files and their conventions
 - The project's CI configuration for how E2E tests are run
@@ -333,9 +328,9 @@ After ALL Maestro tests complete and screenshots are collected:
 
 4. DO NOT mark a test as PASS if you only verified text existence. Text assertions (assertVisible) verify CONTENT. Screenshot verification verifies APPEARANCE. Both must pass.
 
-### 7. Limited-Capability Framework Fallback (Maestro, Detox, etc.)
+### 7. Limited-Capability Framework Fallback (Maestro)
 
-When the E2E framework cannot read computed styles or DOM properties (which is ALWAYS the case for Maestro and Detox):
+When the E2E framework cannot read computed styles or DOM properties (which is ALWAYS the case for Maestro):
 
 1. **Write assertions for what the framework CAN verify** — text content, element visibility, tap responses, navigation outcomes.
 2. **After EVERY `takeScreenshot` command, analyze the screenshot** using `Agent(subagent_type="image-analyzer")`. NEVER read image files directly with the Read tool — high-res screenshots fill your context and hit dimension limits. This is NOT optional — it is the ONLY way to verify visual properties in these frameworks.

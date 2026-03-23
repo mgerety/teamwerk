@@ -18,7 +18,7 @@ These override your default assumptions. Follow project rules before skill defau
 
 After reading `teamwerk-config.yml`, check `testing.e2e` for framework-specific configuration:
 
-1. **`testing.e2e.framework`** — Should be `playwright` (or `cypress`). If it says `maestro` or `detox`, you are the wrong skill — the mobile-test-engineer should handle this.
+1. **`testing.e2e.framework`** — Should be `playwright` (or `cypress`). If it says `maestro`, you are the wrong skill — the mobile-test-engineer should handle this.
 2. **`testing.e2e.test_dir`** — Where to write E2E test files.
 3. **`testing.e2e.run_command`** — The exact command to run E2E tests.
 4. **`testing.e2e.report_command`** — Command to generate the evidence report after tests run.

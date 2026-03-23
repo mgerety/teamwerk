@@ -13,5 +13,5 @@ This skill has been split into platform-specific skills:
 Both enforce the same E2E Evidence Standard (data contract, test headers, escalation protocol, visual verification).
 
 Check `teamwerk-config.yml` → `testing.e2e.framework` to determine which skill applies:
-- `maestro`, `detox` → mobile-test-engineer
+- `maestro` → mobile-test-engineer
 - `playwright`, `cypress` → web-test-engineer
