@@ -210,6 +210,17 @@ Think of it this way: the role (Backend Builder, Frontend Builder) is a skill se
 
 6. **Final deliverable.** When all ACs are implemented, tested, and the Adversarial Reviewer has passed everything, generate the final HTML evidence report. Review it yourself before declaring the work complete.
 
+7. **Shut down teammates immediately on completion (MANDATORY).** The moment a teammate sends you a `completion_report` message, your very next action MUST be to send that teammate a `SendMessage` with `type: "shutdown_request"`. Do this BEFORE:
+   - Verifying their claims
+   - Reporting to the user
+   - Updating team-state.md
+   - Spawning the next teammate
+   - Anything else
+
+   Rationale: teammates do not auto-exit. If you don't explicitly shut them down, they remain idle in tmux holding their full context window in RAM. Orphan teammates from prior sessions have accumulated to 15+ stale teams on a single machine. One completion report → immediate shutdown_request → then continue your workflow. If you later need the teammate's help on a follow-up, spawn a fresh one — do not keep them alive "just in case."
+
+   If you realize you forgot to shut down earlier teammates (e.g., after a compaction), send `shutdown_request` to every teammate on your roster that has already reported completion, before doing anything else.
+
 ## Coordination Workflow
 
 ### Phase 1: Planning (do this FAST — minutes, not hours)

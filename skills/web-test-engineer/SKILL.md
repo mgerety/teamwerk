@@ -424,3 +424,22 @@ Your context window is finite. Protect it.
 **Write progress to disk.** Write status to `.teamwerk/progress.md` before starting major tasks.
 
 **If you see a compaction warning, STOP and externalize.** Write current state to `.teamwerk/progress.md`.
+
+## Completion Protocol (Mandatory)
+
+When your assigned task is done, you MUST follow this exact sequence:
+
+1. **Mark your task completed.** Use `TaskUpdate` to set your task's status to `completed`. Include a final note summarizing the result.
+2. **Send exactly ONE completion report to your Team Lead.** Use `SendMessage` with:
+   - `type: "completion_report"`
+   - A summary of what you did
+   - Evidence (file paths changed, test results, screenshots, commands run)
+   - Any blockers, caveats, or follow-ups the lead should know about
+3. **STOP.** After sending the completion report, do NOT take any further action:
+   - Do not start new work on your own
+   - Do not poll, re-check, or "just verify one more thing"
+   - Do not send additional messages unless the Team Lead messages you first
+   - Remain idle and wait for either a `shutdown_request` or a new task assignment
+4. **If you receive `shutdown_request`, exit immediately.** Do not argue, do not summarize again, do not take a final look. Just exit.
+
+**Why this matters:** Teammates that keep working after "done" create orphaned processes that hold full context in RAM, clutter tmux, and confuse future Team Leads. One task → one completion report → stop. That's the contract.
